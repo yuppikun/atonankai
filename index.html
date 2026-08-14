@@ -5,48 +5,53 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>あと何回。｜人生の残り回数を、国の統計で数える</title>
 <meta name="description" content="あなたに残された週末は、何回か。親に会えるのは、あと何回か。厚生労働省の生命表をもとに、人生の残り回数を計算します。入力はすべてブラウザ内で完結し、どこにも送信されません。">
-<meta name="theme-color" content="#131C40">
-<link rel="canonical" href="https://atonankai.com/">
+<meta name="theme-color" content="#17201D">
+<link rel="canonical" href="https://atonankai.pages.dev/">
 
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="あと何回。">
 <meta property="og:title" content="あと何回。｜人生の残り回数を、国の統計で数える">
 <meta property="og:description" content="あなたに残された週末は、何回か。厚生労働省の生命表をもとに計算します。">
-<meta property="og:url" content="https://atonankai.com/">
-<meta property="og:image" content="https://atonankai.com/assets/img/ogp.png">
+<meta property="og:url" content="https://atonankai.pages.dev/">
+<meta property="og:image" content="https://atonankai.pages.dev/assets/img/ogp.png">
 <meta name="twitter:card" content="summary_large_image">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=Dela+Gothic+One&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Outfit:wght@200;300;500&family=Roboto+Mono:wght@400;500&family=Caveat:wght@400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body>
 
-<!-- リソグラフ風の紙目テクスチャ -->
+<!-- チョークの粉のような、ごく薄い粒状テクスチャ -->
 <div class="grain" aria-hidden="true"></div>
 
 <!-- ============ 表紙 ============ -->
 <header class="cover" id="cover">
+  <div class="eqbg" id="eqBg" aria-hidden="true"></div>
   <div class="cover__inner">
-    <p class="eyebrow">人生の残量計算機</p>
-    <h1 class="logo" data-shadow="あと何回。">あと何回。</h1>
+    <h1 class="logo">あと何回。<svg class="logo__rule" viewBox="0 0 280 10" aria-hidden="true" preserveAspectRatio="none"><path d="M4 6 C 60 2, 120 8, 160 4 S 240 7, 276 5"/></svg></h1>
     <p class="cover__lead">
-      あなたに残された週末は、何回だろう。<br>
-      親に会えるのは、あと何回だろう。
+      あなたに残された週末は、あと何回だろう。<br>
+      家族と同じ食卓を囲めるのは、あと何回だろう。
     </p>
     <p class="cover__body">
-      厚生労働省の生命表から起こした生存率曲線で、あなたの残りを数えます。<br>
-      平均寿命からの引き算ではありません。
+      平均寿命から今の年齢を引く、という計算はしていません。厚生労働省が公表している生命表をもとに、
+      0歳から110歳までの生存率曲線を1歳きざみで作りました。誰かに会える回数は、
+      「自分と相手が同時に生きている確率」を時間で積み上げて出しています。
+      相手が先に亡くなる可能性も、自分が先に亡くなる可能性も含めた数字です。
+      だから、「平均で何年」では出てこない数字になります。
     </p>
+    <div class="trustbox">
+      <p>メールアドレスも、名前も、会員登録も要りません。</p>
+      <p>入力した内容はあなたの端末の中だけで計算され、どこにも送信されません。</p>
+    </div>
     <button class="btn btn--go" type="button" data-go="basic">数えはじめる</button>
     <ul class="cover__trust">
-      <li>入力は端末内で計算。<b>どこにも送信されません</b></li>
       <li>登録・メール不要</li>
       <li>出典はすべて公開</li>
     </ul>
   </div>
-  <div class="cover__clock" aria-hidden="true"><div id="coverClock"></div></div>
 </header>
 
 <noscript>
@@ -64,8 +69,12 @@
     <h2 class="h2">まず、この3つだけ。</h2>
 
     <div class="field">
-      <label class="label" for="birth">生年月日</label>
-      <input class="input" type="date" id="birth" min="1900-01-01">
+      <span class="label" id="birthLabel">生年月日</span>
+      <div class="dategrid" role="group" aria-labelledby="birthLabel">
+        <select class="select" id="birthY" aria-label="生まれた年"><option value="">年</option></select>
+        <select class="select" id="birthM" aria-label="生まれた月"><option value="">月</option></select>
+        <select class="select" id="birthD" aria-label="生まれた日"><option value="">日</option></select>
+      </div>
       <p class="hint" id="ageHint"></p>
     </div>
 
@@ -132,14 +141,15 @@
     <div class="hero" id="hero">
       <p class="hero__eyebrow">あなたの人生の時刻は</p>
       <div class="hero__clock" id="heroClock"></div>
-      <p class="hero__time"><b id="clockText">--:--</b></p>
+      <p class="hero__time"><b id="clockText">--:--</b><span class="hero__ampm" id="clockAmpm"></span></p>
       <p class="hero__sub" id="clockSub"></p>
     </div>
 
     <div class="headline">
       <p class="headline__label">残された週末</p>
       <p class="headline__num"><b id="weekendNum">0</b><span>回</span></p>
-      <div class="dots" id="weekendDots" aria-hidden="true"></div>
+      <div class="bar" aria-hidden="true"><div class="bar__fill" id="weekendBarFill"></div></div>
+      <div class="barcap" aria-hidden="true"><span>生まれた日</span><span id="weekendBarAge"></span></div>
       <p class="headline__note" id="weekendNote"></p>
     </div>
 
@@ -163,8 +173,8 @@
       <button class="btn btn--ghost" type="button" data-go="basic">条件を変える</button>
     </div>
 
-    <!-- 大人のページへの導線 -->
-    <div class="adultgate" id="adultgate">
+    <!-- 大人のページへの導線（STEP2で「パートナーとの時間」を選んだ人にだけ表示） -->
+    <div class="adultgate" id="adultgate" hidden>
       <p class="adultgate__tag">18歳以上のかたへ</p>
       <h3 class="adultgate__h">パートナーと過ごせる夜は、あと何回か。</h3>
       <p class="adultgate__lead">
@@ -182,9 +192,22 @@
 
 </main>
 
-<!-- ============ 出典 ============ -->
+<!-- ============ フッター ============ -->
 <footer class="foot">
   <div class="wrap">
+    <div class="foot__top">
+      <p class="foot__name">あと何回。</p>
+      <p class="foot__tagline">国の統計から、人生の残り回数を数える計算機です。</p>
+    </div>
+
+    <ul class="foot__nav">
+      <li><a href="about.html">このサイトについて</a></li>
+      <li><a href="privacy.html">プライバシーポリシー</a></li>
+      <li><a href="terms.html">利用規約</a></li>
+      <li><a href="disclaimer.html">免責事項</a></li>
+      <li><a href="contact.html">お問い合わせ</a></li>
+    </ul>
+
     <h2 class="foot__h">計算の根拠</h2>
     <div class="foot__cols">
       <div>
@@ -203,7 +226,14 @@
         <p>結果は統計上の期待値です。個人の寿命を予測するものでも、医学的な助言でもありません。</p>
       </div>
     </div>
-    <p class="foot__sign">あと何回。 — 終わりを数えると、今が濃くなる。</p>
+
+    <p class="foot__notice">本サイトの計算結果は統計上の期待値であり、個人の寿命を予測するものではありません。</p>
+
+    <div class="foot__bottom">
+      <!-- TODO: 運営者名。正式名称が決まったら、全ページのこの箇所を差し替えること -->
+      <span>© 2026 あと何回。運営</span>
+      <span>終わりを数えると、今が濃くなる。</span>
+    </div>
   </div>
 </footer>
 

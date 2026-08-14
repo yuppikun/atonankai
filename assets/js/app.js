@@ -15,6 +15,12 @@ const el = (tag, cls, html) => {
 const esc = s => String(s).replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+const mq = q => typeof window.matchMedia === 'function' && window.matchMedia(q).matches;
+const reducedMotion = () => mq('(prefers-reduced-motion: reduce)');
+const raf = typeof requestAnimationFrame === 'function'
+  ? requestAnimationFrame.bind(window)
+  : fn => setTimeout(fn, 16);
+
 /* ---------- 状態 ---------- */
 
 const S = {
@@ -62,12 +68,20 @@ const CATS = [
   { id: 'pet',     t: 'ペットと過ごす時間',  d: '犬・猫の平均寿命から計算' },
   { id: 'phone',   t: 'スマホを置いたら',    d: '減らすと戻ってくる時間' },
   { id: 'media',   t: '動画・テレビ',        d: '同じく、取り戻せる時間' },
-  { id: 'sakura',  t: '桜を見られる回数',    d: '年に一度しかない景色' }
+  { id: 'sakura',  t: '桜を見られる回数',    d: '年に一度しかない景色' },
+  { id: 'partner', t: 'パートナーとの時間',  d: '18歳以上の方のみ・同意の確認があります', adult: true }
 ];
 
 /* ---------- 画面遷移 ---------- */
 
 const SCREENS = ['basic', 'pick', 'detail', 'result'];
+
+function playEnter(elm) {
+  if (!elm) return;
+  elm.classList.remove('screen-enter');
+  void elm.offsetWidth; // アニメーションを再生させるための強制リフロー
+  elm.classList.add('screen-enter');
+}
 
 function go(name) {
   $('#cover').hidden = (name !== 'cover');
@@ -76,16 +90,43 @@ function go(name) {
   if (name === 'detail') renderQuestions();
   if (name === 'result') renderResult();
   window.scrollTo({ top: 0, behavior: 'auto' });
+  playEnter(name === 'cover' ? $('#cover') : $('#screen-' + name));
 }
 
 $$('[data-go]').forEach(b => b.addEventListener('click', () => go(b.dataset.go)));
 
-/* ---------- STEP1 基本 ---------- */
+/* ---------- STEP1 基本：生年月日（年・月・日プルダウン） ---------- */
 
-const birthEl  = $('#birth');
+const birthY = $('#birthY'), birthM = $('#birthM'), birthD = $('#birthD');
 const targetEl = $('#target');
 
-birthEl.max = new Date().toISOString().slice(0, 10);
+const CUR_YEAR = new Date().getFullYear();
+for (let y = CUR_YEAR; y >= CUR_YEAR - 100; y--) {
+  const o = document.createElement('option');
+  o.value = String(y); o.textContent = y + '年';
+  birthY.appendChild(o);
+}
+for (let m = 1; m <= 12; m++) {
+  const o = document.createElement('option');
+  o.value = String(m); o.textContent = m + '月';
+  birthM.appendChild(o);
+}
+
+function daysInMonth(y, m) { return new Date(y, m, 0).getDate(); }
+
+function populateDays() {
+  const y = birthY.value, m = birthM.value;
+  const maxD = (y && m) ? daysInMonth(Number(y), Number(m)) : 31;
+  const prev = birthD.value;
+  birthD.innerHTML = '<option value="">日</option>';
+  for (let d = 1; d <= maxD; d++) {
+    const o = document.createElement('option');
+    o.value = String(d); o.textContent = d + '日';
+    birthD.appendChild(o);
+  }
+  if (prev && Number(prev) <= maxD) birthD.value = prev;
+}
+populateDays();
 
 function syncBasic() {
   const ok = !!S.birth && !!S.sex;
@@ -95,6 +136,8 @@ function syncBasic() {
     S.age = exactAge(S.birth);
     $('#ageHint').textContent = '今日で ' + Math.floor(S.age) + '歳 ' +
       Math.floor((S.age % 1) * 12) + 'か月です。';
+  } else {
+    $('#ageHint').textContent = '';
   }
   if (S.sex && S.birth) {
     const p = reachProbability(S.sex, S.age, S.targetAge);
@@ -104,16 +147,24 @@ function syncBasic() {
       '統計どおりなら、平均であと <b>' + fmt(e, 1) + '年</b>です。';
   } else if (S.sex === null && S.birth) {
     $('#reachNote').textContent = '性別を選ぶと、到達確率も表示されます。';
+  } else {
+    $('#reachNote').textContent = '';
   }
 }
 
-birthEl.addEventListener('change', () => {
-  if (!birthEl.value) { S.birth = null; return syncBasic(); }
-  const d = new Date(birthEl.value + 'T00:00:00');
-  if (isNaN(d) || d > new Date()) { S.birth = null; return syncBasic(); }
-  S.birth = d;
+function syncBirth() {
+  const y = birthY.value, m = birthM.value, d = birthD.value;
+  if (y && m && d) {
+    const date = new Date(Number(y), Number(m) - 1, Number(d));
+    S.birth = (date > new Date()) ? null : date;
+  } else {
+    S.birth = null;
+  }
   syncBasic();
-});
+}
+birthY.addEventListener('change', () => { populateDays(); syncBirth(); });
+birthM.addEventListener('change', () => { populateDays(); syncBirth(); });
+birthD.addEventListener('change', syncBirth);
 
 $$('[data-sex]').forEach(b => b.addEventListener('click', () => {
   $$('[data-sex]').forEach(x => x.setAttribute('aria-pressed', 'false'));
@@ -141,7 +192,8 @@ function renderPicks() {
     b.type = 'button';
     b.setAttribute('aria-pressed', S.picked.has(c.id) ? 'true' : 'false');
     b.innerHTML = '<span class="pick__mark" aria-hidden="true">✓</span>' +
-      '<span><span class="pick__t">' + c.t + '</span>' +
+      '<span><span class="pick__t">' + c.t +
+      (c.adult ? ' <span class="pick__adult">18+</span>' : '') + '</span>' +
       '<span class="pick__d">' + c.d + '</span></span>';
     b.addEventListener('click', () => {
       if (S.picked.has(c.id)) S.picked.delete(c.id); else S.picked.add(c.id);
@@ -154,7 +206,7 @@ function renderPicks() {
 }
 
 $('#pickAll').addEventListener('click', () => {
-  CATS.forEach(c => S.picked.add(c.id));
+  CATS.filter(c => !c.adult).forEach(c => S.picked.add(c.id));
   renderPicks();
   go('detail');
 });
@@ -331,49 +383,91 @@ function renderQuestions() {
 
 $('#toResult').addEventListener('click', () => go('result'));
 
-/* ---------- 人生時計 SVG ---------- */
+/* ---------- 人生時計 SVG（外側：12時間アナログ時計／内側：砂時計） ---------- */
 
-function clockSVG(ratio, size) {
-  const R = 100, cx = 120, cy = 120;
-  const a = ratio * Math.PI * 2 - Math.PI / 2;
-  const large = ratio > 0.5 ? 1 : 0;
-  const ex = cx + R * Math.cos(a), ey = cy + R * Math.sin(a);
+function heroClockSVG(clock) {
+  const cx = 120, cy = 120, R = 100;
+  const hour12 = clock.hour % 12;
+  const hourAngle = (hour12 + clock.minute / 60) / 12 * 360;
+  const minAngle = (clock.minute / 60) * 360;
+
+  const toXY = (deg, r) => {
+    const rad = (deg - 90) * Math.PI / 180;
+    return [cx + r * Math.cos(rad), cy + r * Math.sin(rad)];
+  };
+  const [hx, hy] = toXY(hourAngle, 42);
+  const [mx, my] = toXY(minAngle, 62);
+
+  const numerals = { 0: '12', 3: '3', 6: '6', 9: '9' };
   let ticks = '';
-  for (let i = 0; i < 24; i++) {
-    const t = (i / 24) * Math.PI * 2 - Math.PI / 2;
-    const r1 = i % 6 === 0 ? 78 : 88;
-    ticks += `<line x1="${(cx + r1 * Math.cos(t)).toFixed(1)}" y1="${(cy + r1 * Math.sin(t)).toFixed(1)}" x2="${(cx + 96 * Math.cos(t)).toFixed(1)}" y2="${(cy + 96 * Math.sin(t)).toFixed(1)}" stroke="#4A5590" stroke-width="${i % 6 === 0 ? 3 : 1.5}"/>`;
+  for (let i = 0; i < 12; i++) {
+    const deg = i * 30;
+    if (numerals[i] != null) {
+      const [tx, ty] = toXY(deg, 78);
+      ticks += `<text x="${tx.toFixed(1)}" y="${(ty + 5).toFixed(1)}" text-anchor="middle" font-family="Outfit,sans-serif" font-size="15" font-weight="300" fill="var(--chalk-dim)">${numerals[i]}</text>`;
+    } else {
+      const [x1, y1] = toXY(deg, 88);
+      const [x2, y2] = toXY(deg, 96);
+      ticks += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="var(--chalk-faint)" stroke-width="1.5"/>`;
+    }
   }
-  return `<svg viewBox="0 0 240 240" role="img" aria-label="人生の進み具合">
-    <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="#2C3670" stroke-width="14"/>
-    <path d="M ${cx} ${cy - R} A ${R} ${R} 0 ${large} 1 ${ex.toFixed(1)} ${ey.toFixed(1)}"
-          fill="none" stroke="#FF5B2E" stroke-width="14" stroke-linecap="round"/>
+
+  /* 砂時計（内側）。上の砂＝残り、下の砂＝過ぎた分。ratio と必ず一致させる */
+  const gTop = 90, gMid = 120, gBot = 150, halfW = 28, neckW = 3;
+  const ratio = Math.min(1, Math.max(0, clock.ratio));
+  const leftAt = (t, w0, w1) => cx - (w0 + t * (w1 - w0));
+  const rightAt = (t, w0, w1) => cx + (w0 + t * (w1 - w0));
+
+  const t0 = ratio; // 上の砂の表面（ネック側からratio分だけ下がる＝残りが減る）
+  const topSurfaceY = gTop + t0 * (gMid - gTop);
+  const topSand = ratio >= 0.999 ? '' : `<path d="M ${leftAt(t0, halfW, neckW).toFixed(1)} ${topSurfaceY.toFixed(1)} L ${rightAt(t0, halfW, neckW).toFixed(1)} ${topSurfaceY.toFixed(1)} L ${(cx + neckW).toFixed(1)} ${gMid} L ${(cx - neckW).toFixed(1)} ${gMid} Z" fill="var(--accent)" opacity=".85"/>`;
+
+  const s0 = 1 - ratio; // 下の砂の表面（底からratio分だけ積み上がる＝過ぎた分が増える）
+  const botSurfaceY = gMid + s0 * (gBot - gMid);
+  const botSand = ratio <= 0.001 ? '' : `<path d="M ${leftAt(s0, neckW, halfW).toFixed(1)} ${botSurfaceY.toFixed(1)} L ${rightAt(s0, neckW, halfW).toFixed(1)} ${botSurfaceY.toFixed(1)} L ${rightAt(1, neckW, halfW).toFixed(1)} ${gBot} L ${leftAt(1, neckW, halfW).toFixed(1)} ${gBot} Z" fill="var(--accent-2)" opacity=".85"/>`;
+
+  const stream = (ratio > 0.001 && ratio < 0.999)
+    ? `<line x1="${cx}" y1="${gMid - 5}" x2="${cx}" y2="${gMid + 5}" stroke="var(--accent)" stroke-width="1" opacity=".8"/>` : '';
+
+  const glassOutline =
+    `<path d="M ${cx - halfW} ${gTop} L ${cx + halfW} ${gTop} L ${cx + neckW} ${gMid} L ${cx + halfW} ${gBot} L ${cx - halfW} ${gBot} L ${cx - neckW} ${gMid} Z" fill="none" stroke="var(--chalk)" stroke-width="1.5" stroke-linejoin="round"/>` +
+    `<line x1="${cx - halfW - 6}" y1="${gTop}" x2="${cx + halfW + 6}" y2="${gTop}" stroke="var(--chalk)" stroke-width="2" stroke-linecap="round"/>` +
+    `<line x1="${cx - halfW - 6}" y1="${gBot}" x2="${cx + halfW + 6}" y2="${gBot}" stroke="var(--chalk)" stroke-width="2" stroke-linecap="round"/>`;
+
+  return `<svg viewBox="0 0 240 240" role="img" aria-label="人生の時刻 ${clock.text}">
+    <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="var(--chalk-faint)" stroke-width="1.5"/>
     ${ticks}
-    <line x1="${cx}" y1="${cy}" x2="${(cx + 66 * Math.cos(a)).toFixed(1)}" y2="${(cy + 66 * Math.sin(a)).toFixed(1)}"
-          stroke="#FFCF3F" stroke-width="6" stroke-linecap="round"/>
-    <circle cx="${cx}" cy="${cy}" r="9" fill="#FFCF3F"/>
+    <g class="sand-fall" data-ratio="${ratio.toFixed(6)}">${topSand}${botSand}${stream}${glassOutline}</g>
+    <line data-role="hour" data-angle="${hourAngle.toFixed(3)}" x1="${cx}" y1="${cy}" x2="${hx.toFixed(1)}" y2="${hy.toFixed(1)}" stroke="var(--chalk)" stroke-width="3" stroke-linecap="round"/>
+    <line data-role="minute" data-angle="${minAngle.toFixed(3)}" x1="${cx}" y1="${cy}" x2="${mx.toFixed(1)}" y2="${my.toFixed(1)}" stroke="var(--chalk)" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="${cx}" cy="${cy}" r="3" fill="var(--accent)"/>
   </svg>`;
 }
 
-/* 表紙の飾り時計 */
-$('#coverClock').innerHTML = clockSVG(0.42);
+/* ---------- 数字のカウントアップ ---------- */
 
-/* ---------- 週末ドット ---------- */
-
-function drawDots(host, spent, left) {
-  host.innerHTML = '';
-  const total = spent + left;
-  let scale = 1;
-  while ((total / scale) > 3600) scale++;
-  const nSpent = Math.round(spent / scale), nLeft = Math.round(left / scale);
-  const frag = document.createDocumentFragment();
-  for (let i = 0; i < nSpent; i++) frag.appendChild(el('span', 'dot dot--spent'));
-  for (let i = 0; i < nLeft; i++) frag.appendChild(el('span', 'dot'));
-  host.appendChild(frag);
-  return scale;
+function animateCountUp(elm) {
+  if (!elm || reducedMotion()) return;
+  const raw = elm.textContent;
+  const m = /^([+\-]?)([\d,]+(?:\.\d+)?)$/.exec(raw);
+  if (!m) return;
+  const prefix = m[1];
+  const numStr = m[2].replace(/,/g, '');
+  const digits = (numStr.split('.')[1] || '').length;
+  const target = parseFloat(numStr);
+  if (!isFinite(target)) return;
+  const dur = 600;
+  const t0 = Date.now();
+  elm.textContent = prefix + fmt(0, digits);
+  (function tick() {
+    const p = Math.min(1, (Date.now() - t0) / dur);
+    const eased = 1 - Math.pow(1 - p, 3);
+    elm.textContent = prefix + fmt(target * eased, digits);
+    if (p < 1) raf(tick); else elm.textContent = raw;
+  })();
 }
 
-/* ---------- 結果 ---------- */
+/* ---------- 出典タグ・カード ---------- */
 
 const srcTag = k => `<p class="card__src">出典：<a href="${SOURCES[k].url}" target="_blank" rel="noopener">${SOURCES[k].label}</a></p>`;
 
@@ -393,27 +487,45 @@ function card(cls, label, title, numHTML, subHTML, rows, src) {
 
 const bigNum = (n, unit) => '<b>' + n + '</b><span>' + unit + '</span>';
 
+/* ---------- 18歳以上向けゲートの表示制御 ---------- */
+
+function updateAdultGate() {
+  const show = S.picked.has('partner');
+  if (!show) {
+    S.adultOpen = false;
+    $('#adultgate').hidden = true;
+    $('#adultResult').hidden = true;
+    $('#adultResult').innerHTML = '';
+    return;
+  }
+  $('#adultgate').hidden = S.adultOpen;
+  $('#adultResult').hidden = !S.adultOpen;
+}
+
+/* ---------- 結果 ---------- */
+
 function renderResult() {
   const me = self();
   const rem = selfRemainingYears(me);
   const u = yearsToUnits(rem);
   const clock = lifeClock(me);
 
-  /* ヒーロー：人生の時刻 */
-  $('#heroClock').innerHTML = clockSVG(clock.ratio);
+  /* ヒーロー：人生の時刻＋砂時計 */
+  $('#heroClock').innerHTML = heroClockSVG(clock);
   $('#clockText').textContent = clock.text;
+  $('#clockAmpm').textContent = clock.hour < 12 ? '午前' : '午後';
   $('#clockSub').innerHTML =
     S.targetAge + '歳までの人生を、1日24時間に縮めたときの現在地です。<br>' +
     '夜が明けてから <b>' + fmt(clock.ratio * 100, 1) + '%</b> が過ぎました。';
 
-  /* 見出し：残された週末 */
+  /* 見出し：残された週末（ドットではなく、細い経過バーで表す） */
   const spentWeekends = S.age * WEEKS_PER_YEAR;
   const leftWeekends = u.weekends;
+  const totalWeekends = spentWeekends + leftWeekends;
   $('#weekendNum').textContent = fmt(leftWeekends);
-  const scale = drawDots($('#weekendDots'), spentWeekends, leftWeekends);
-  $('#weekendNote').innerHTML =
-    (scale === 1 ? '点のひとつが、1回の週末です。' : '点のひとつが、' + scale + '回の週末です。') +
-    '濃い点は、もう過ぎたぶん。';
+  $('#weekendBarFill').style.width = (totalWeekends > 0 ? (spentWeekends / totalWeekends * 100) : 0) + '%';
+  $('#weekendBarAge').textContent = S.targetAge + '歳';
+  $('#weekendNote').textContent = 'これは、あと' + fmt(leftWeekends) + '回の土曜と日曜のこと。';
 
   /* カード群 */
   const box = $('#cards');
@@ -421,7 +533,7 @@ function renderResult() {
   const P = S.picked;
 
   if (P.has('time')) {
-    box.appendChild(card('card--yellow card--wide', 'REMAINING', '残された時間のすべて',
+    box.appendChild(card('card--wide', 'REMAINING', '残された時間のすべて',
       bigNum(fmt(u.days), '日'),
       '<b>' + fmt(u.hours) + '</b> 時間。眠っている時間も、すべて含めた総量です。',
       [['年', fmt(rem, 1) + ' 年'], ['か月', fmt(u.months) + ' か月'],
@@ -430,7 +542,7 @@ function renderResult() {
 
   if (P.has('healthy')) {
     const h = healthySplit(me);
-    box.appendChild(card('card--green card--wide', 'HEALTHY LIFE', '自分の足で動ける時間',
+    box.appendChild(card('card--accent3 card--wide', 'HEALTHY LIFE', '自分の足で動ける時間',
       bigNum(fmt(h.healthy * YEAR_DAYS), '日'),
       '健康寿命は' + (S.sex === 'female' ? '女性で75.45歳' : S.sex === 'male' ? '男性で72.57歳' : '男女平均で74.01歳') +
       '。旅にも山にも行けるのは <b>' + fmt(h.healthy, 1) + '年</b>、残りの <b>' + fmt(h.limited, 1) +
@@ -470,7 +582,7 @@ function renderResult() {
       const meet = jy * p.freq;
       const naive = naiveYears(other) * p.freq;
       const out = outlivedProbability(me, other);
-      box.appendChild(card('card--pink card--wide', 'FAMILY',
+      box.appendChild(card('card--accent2 card--wide', 'FAMILY',
         (esc(p.label) || '親') + 'に会えるのは、あと',
         bigNum(fmt(meet), '回'),
         '<b>' + freqLabel(p.freq) + '</b>のペースなら、この数字です。' +
@@ -489,7 +601,7 @@ function renderResult() {
       const leave = c.leave || 18;
       const yrs = leave - c.age;
       if (yrs <= 0) {
-        box.appendChild(card('card--green card--wide', 'CHILD',
+        box.appendChild(card('card--accent3 card--wide', 'CHILD',
           (esc(c.label) || 'この子') + 'は、もう巣立ちの年齢です',
           null,
           '同じ家で数える時間は、ここまででした。' +
@@ -497,7 +609,7 @@ function renderResult() {
         return;
       }
       const pAlive = survive(me.sex, me.age, yrs);
-      box.appendChild(card('card--green card--wide', 'CHILD',
+      box.appendChild(card('card--accent3 card--wide', 'CHILD',
         (esc(c.label) || '子ども') + 'と同じ家で過ごせるのは、あと',
         bigNum(fmt(yrs * YEAR_DAYS), '日'),
         '<b>' + fmt(yrs, 1) + '年</b>後に' + leave + '歳。' +
@@ -531,14 +643,14 @@ function renderResult() {
       const span = PET_LIFESPAN[p.kind || 'dog'];
       const yrs = span - p.age;
       if (yrs <= 0) {
-        box.appendChild(card('card--yellow card--wide', 'PET',
+        box.appendChild(card('card--accent2 card--wide', 'PET',
           (esc(p.label) || 'この子') + 'は、もう平均寿命を越えています',
           null,
           (p.kind === 'cat' ? '猫' : '犬') + 'の平均寿命は' + span + '歳。' +
           'ここから先は、統計の外側にある時間です。1日ずつ、数えてください。'));
         return;
       }
-      box.appendChild(card('card--yellow card--wide', 'PET',
+      box.appendChild(card('card--accent2 card--wide', 'PET',
         (esc(p.label) || 'この子') + 'と一緒にいられるのは、あと',
         bigNum(fmt(yrs * YEAR_DAYS), '日'),
         (p.kind === 'cat' ? '猫' : '犬') + 'の平均寿命は <b>' + span + '歳</b>。' +
@@ -571,11 +683,18 @@ function renderResult() {
   }
 
   if (P.has('sakura')) {
-    box.appendChild(card('card--pink', 'SPRING', '桜を見られる回数',
+    box.appendChild(card('card--accent2', 'SPRING', '桜を見られる回数',
       bigNum(fmt(u.springs), '回'),
       '来年の春も、その次の春も、この回数のうちの1回です。'));
   }
 
+  /* カードの登場アニメーション（40msずつ遅らせる）と、数字のカウントアップ */
+  $$('.card', box).forEach((c, i) => { c.style.animationDelay = (i * 40) + 'ms'; });
+  $$('.headline__num b, .card__num b').forEach((b, i) => {
+    setTimeout(() => animateCountUp(b), Math.min(i, 12) * 40);
+  });
+
+  updateAdultGate();
   setupShare(leftWeekends, clock);
 }
 
@@ -663,60 +782,55 @@ async function buildImage() {
   if (document.fonts && document.fonts.load) {
     try {
       await Promise.all([
-        document.fonts.load('400 260px Anton'),
-        document.fonts.load('400 62px "Dela Gothic One"'),
+        document.fonts.load('200 260px Outfit'),
+        document.fonts.load('800 62px "Shippori Mincho B1"'),
         document.fonts.load('500 30px "Roboto Mono"')
       ]);
       await document.fonts.ready;
     } catch (e) { /* 読めなくても代替フォントで描画する */ }
   }
 
-  x.fillStyle = '#131C40'; x.fillRect(0, 0, W, H);
-
-  /* 蛍光の版ズレ帯 */
-  x.fillStyle = '#FF5B2E'; x.fillRect(0, 0, W, 26);
-  x.fillStyle = '#FF3D8B'; x.fillRect(0, 26, W, 10);
-
+  x.fillStyle = '#17201D'; x.fillRect(0, 0, W, H);
   x.textAlign = 'center';
 
-  x.fillStyle = '#FF5B2E';
+  x.fillStyle = '#D9C86A';
   x.font = '500 30px "Roboto Mono", monospace';
   x.fillText('A T O N A N K A I', W / 2, 150);
 
-  x.fillStyle = '#F0EDE3';
-  x.font = '400 62px "Dela Gothic One", sans-serif';
+  x.fillStyle = '#EDEAE0';
+  x.font = '800 58px "Shippori Mincho B1", serif';
   x.fillText('私に残された週末は', W / 2, 300);
 
-  x.fillStyle = '#FFCF3F';
-  x.font = '400 260px Anton, Impact, sans-serif';
+  x.fillStyle = '#D9C86A';
+  x.font = '200 260px Outfit, sans-serif';
   x.fillText(fmt(shareState.weekends), W / 2, 560);
 
-  x.fillStyle = '#F0EDE3';
-  x.font = '400 68px "Dela Gothic One", sans-serif';
+  x.fillStyle = '#EDEAE0';
+  x.font = '800 60px "Shippori Mincho B1", serif';
   x.fillText('回', W / 2, 660);
 
-  /* 週末ドット */
-  const cols = 44, rows = 16, gap = 20, r = 5.5;
-  const startX = (W - (cols - 1) * gap) / 2, startY = 760;
-  const totalDots = cols * rows;
-  const spent = S.age / (S.targetAge || 84);
-  for (let i = 0; i < totalDots; i++) {
-    const cx0 = startX + (i % cols) * gap, cy0 = startY + Math.floor(i / cols) * gap;
-    x.beginPath(); x.arc(cx0, cy0, r, 0, Math.PI * 2);
-    x.fillStyle = (i / totalDots) < spent ? 'rgba(240,237,227,.16)' : '#FF5B2E';
-    x.fill();
-  }
+  /* 経過バー */
+  const barW = 820, barH = 10, barX = (W - barW) / 2, barY = 760;
+  const spentRatio = Math.min(1, Math.max(0, S.age / (S.targetAge || 84)));
+  x.fillStyle = '#3A4741';
+  x.fillRect(barX, barY, barW, barH);
+  x.fillStyle = '#C98C7A';
+  x.fillRect(barX, barY, barW * spentRatio, barH);
+
+  x.fillStyle = '#9AA5A0';
+  x.font = '400 26px "Roboto Mono", monospace';
+  x.fillText('生まれた日から、' + (S.targetAge || 84) + '歳までの道のり', W / 2, 830);
 
   /* 人生の時刻 */
-  x.fillStyle = '#8E98C6';
+  x.fillStyle = '#9AA5A0';
   x.font = '500 28px "Roboto Mono", monospace';
   x.fillText('人生の時刻', W / 2, 1145);
-  x.fillStyle = '#FFCF3F';
-  x.font = '400 118px Anton, Impact, sans-serif';
+  x.fillStyle = '#D9C86A';
+  x.font = '200 118px Outfit, sans-serif';
   x.fillText(shareState.clock ? shareState.clock.text : '--:--', W / 2, 1250);
 
-  x.fillStyle = '#F0EDE3';
-  x.font = '400 34px "Dela Gothic One", sans-serif';
+  x.fillStyle = '#EDEAE0';
+  x.font = '800 34px "Shippori Mincho B1", serif';
   x.fillText('あと何回。', W / 2, 1315);
 
   return new Promise(res => c.toBlob(res, 'image/png'));
@@ -726,7 +840,7 @@ async function buildImage() {
 
 $('#adultOpen').addEventListener('click', () => {
   S.adultOpen = true;
-  $('#adultgate').hidden = true;
+  updateAdultGate();
   renderAdult();
   $('#adultResult').scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
@@ -767,7 +881,7 @@ function calcAdult() {
   out.innerHTML = '';
   const box = el('div', 'cards');
 
-  box.appendChild(card('card--pink card--wide', 'INTIMACY',
+  box.appendChild(card('card--accent2 card--wide', 'INTIMACY',
     'パートナーと過ごせる夜は、あと',
     bigNum(fmt(r.decayed), '回'),
     '月 <b>' + fmt(f, 1) + '回</b> のいまのペースから、年齢による頻度の低下を織り込んだ期待値です。' +
@@ -776,7 +890,7 @@ function calcAdult() {
      ['いまの頻度を保てた場合', fmt(r.sustained) + ' 回'],
      ['年齢による低下で失われる分', '−' + fmt(lost) + ' 回']], 'jss'));
 
-  box.appendChild(card('card--yellow card--wide', 'IF',
+  box.appendChild(card('card--accent3 card--wide', 'IF',
     'もし月にあと1回、増やせたら',
     bigNum('+' + fmt(plus.decayed - r.decayed), '回'),
     '生涯で <b>' + fmt(plus.decayed) + '回</b>になります。' +
@@ -798,6 +912,9 @@ function calcAdult() {
   out.appendChild(el('p', 'note',
     '年齢による頻度の変化は、各種調査で観察される傾向に形を合わせたモデルです。' +
     '特定の調査の実測値そのものではありません。回数の多い少ないに、良し悪しはありません。'));
+
+  $$('.card', box).forEach((c, i) => { c.style.animationDelay = (i * 40) + 'ms'; });
+  $$('.card__num b', box).forEach((b, i) => setTimeout(() => animateCountUp(b), i * 40));
 }
 
 /* ---------- 出典一覧 ---------- */
@@ -805,5 +922,66 @@ function calcAdult() {
 $('#srcList').innerHTML = Object.keys(SOURCES).map(k =>
   '<li><a href="' + SOURCES[k].url + '" target="_blank" rel="noopener">' +
   SOURCES[k].label + '</a></li>').join('');
+
+/* ---------- 表紙：背景の数式（黒板の落書き） ---------- */
+
+const REQUIRED_EQS = [
+  'e(x) = ∫₀^∞ l(x+t) / l(x) dt',
+  'l(x) = exp( −∫₀ˣ μ(s) ds )',
+  'μ(x) = A + B·e^(Cx)',
+  'q(x) = 1 − e^(−μ(x))',
+  'N = f · ∫₀^∞ S₁(t)·S₂(t) dt',
+  'P(both alive at t) = S₁(t) × S₂(t)',
+  'S(t) = l(x+t) / l(x)'
+];
+const FILLER_EQS = [
+  'Σ (n=1→∞)', 'lim (t→∞)', '∂P/∂t', 'E[X] = ∫ x·f(x) dx',
+  'Var(X) = E[X²] − E[X]²', 'f(x) = dF(x)/dx', 'Γ(n) = (n−1)!',
+  '81.09', '87.13', '72.57', '75.45', 'l(65) = 0.896', 'l(90) = 0.258'
+];
+
+function buildEqBg() {
+  const host = $('#eqBg');
+  if (!host) return;
+  const isMobile = mq('(max-width:640px)');
+  const items = REQUIRED_EQS.concat(FILLER_EQS);
+  const extra = isMobile ? 2 : 10;
+  for (let i = 0; i < extra; i++) items.push(FILLER_EQS[i % FILLER_EQS.length]);
+
+  const frag = document.createDocumentFragment();
+  items.forEach((text, i) => {
+    const avoidCenter = i >= REQUIRED_EQS.length;
+    let x, y, tries = 0;
+    do {
+      x = Math.random() * 92 + 2;
+      y = Math.random() * 92 + 2;
+      tries++;
+    } while (avoidCenter && tries < 6 && x > 26 && x < 74 && y > 30 && y < 70);
+    const rot = (Math.random() * 8 - 4).toFixed(1);
+    const op = (0.06 + Math.random() * 0.04).toFixed(3);
+    const size = (0.95 + Math.random() * 0.7).toFixed(2);
+    const span = el('span', 'eq', esc(text));
+    span.style.left = x + '%';
+    span.style.top = y + '%';
+    span.style.transform = 'rotate(' + rot + 'deg)';
+    span.style.opacity = op;
+    span.style.fontSize = size + 'rem';
+    frag.appendChild(span);
+  });
+  host.appendChild(frag);
+
+  if (!reducedMotion()) {
+    let ticking = false;
+    window.addEventListener('scroll', () => {
+      if (ticking) return;
+      ticking = true;
+      raf(() => {
+        host.style.transform = 'translateY(' + (window.scrollY * 0.05) + 'px)';
+        ticking = false;
+      });
+    }, { passive: true });
+  }
+}
+buildEqBg();
 
 })();
