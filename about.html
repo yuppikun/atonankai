@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>このサイトについて｜あと何回。</title>
+<meta name="description" content="「あと何回。」はなぜ作られたのか。厚生労働省の生命表をもとにした計算の考え方、使用している統計の出典、運営者について説明します。">
+<meta name="theme-color" content="#17201D">
+<link rel="canonical" href="https://atonankai.pages.dev/about.html">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="あと何回。">
+<meta property="og:title" content="このサイトについて｜あと何回。">
+<meta property="og:description" content="「あと何回。」はなぜ作られたのか。計算の考え方と、使用している統計の出典をまとめました。">
+<meta property="og:url" content="https://atonankai.pages.dev/about.html">
+<meta property="og:image" content="https://atonankai.pages.dev/assets/img/ogp.png">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Outfit:wght@200;300;500&family=Roboto+Mono:wght@400;500&family=Caveat:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+<div class="grain" aria-hidden="true"></div>
+
+<header class="subhead">
+  <div class="wrap"><a class="subhead__logo" href="index.html">あと何回。</a></div>
+</header>
+
+<main>
+<div class="wrap">
+<section class="legal">
+  <h1>このサイトについて</h1>
+
+  <h2>なぜ、これを作ったか</h2>
+  <p>
+    人は、終わりがあることを頭ではわかっていても、ふだんはそれを忘れて生きています。
+    「親に会えるのはあと何回だろう」と考える機会は、誕生日でも、正月でもなく、
+    たいてい何かを失いかけたときにしか訪れません。
+  </p>
+  <p>
+    このサイトは、その問いを先取りするために作りました。数字は動かしようのない事実ですが、
+    不思議なことに、残りの回数を数えると、目の前の一回が急に重くなります。
+    終わりを意識することは、悲観することではなく、今をどう使うかを選び直すことだと考えています。
+  </p>
+
+  <h2>計算の考え方</h2>
+  <p>
+    「平均寿命 − 今の年齢」という引き算はしていません。厚生労働省が公表している生命表をもとに、
+    0歳から110歳までの1歳きざみの生存率曲線 <b>l(x)</b> を作り、年齢ごとの生存確率をなめらかに補間して使っています。
+  </p>
+  <p>
+    ある年齢の人が、その先どれだけ生きるかは期待値として次のように表せます。
+  </p>
+  <p style="font-family:var(--f-num);color:var(--accent);font-size:1.1rem;letter-spacing:.02em">
+    e(x) = ∫₀^∞ l(x+t) / l(x) dt
+  </p>
+  <p>
+    生存率曲線そのものは、瞬間死亡率 μ(x) を年齢に応じて滑らかに変化する関数として仮定し、
+    公表されている平均余命・生存割合に一致するようフィッティングしたものです。
+  </p>
+  <p style="font-family:var(--f-num);color:var(--accent);font-size:1.1rem;letter-spacing:.02em">
+    l(x) = exp( −∫₀ˣ μ(s) ds )　　　　μ(x) = A + B·e^(Cx)
+  </p>
+  <p>
+    「誰かに会える回数」は、この生存率をもう一段階使います。あなたと相手、それぞれが
+    ある時点まで生きている確率を掛け合わせ、それを時間で積み上げることで
+    「二人が同時に生きている期間」の期待値を出しています。
+  </p>
+  <p style="font-family:var(--f-num);color:var(--accent);font-size:1.1rem;letter-spacing:.02em">
+    N = f · ∫₀^∞ S₁(t)·S₂(t) dt　　　　S(t) = l(x+t) / l(x)
+  </p>
+  <p>
+    ここには、相手が先に亡くなる可能性だけでなく、あなた自身が先に亡くなる可能性も織り込まれています。
+    どちらか一方の平均余命だけで数えるより、実態に近い数字になると考えています。
+    年齢による頻度の変化を扱う一部の項目は、各種調査で観察される傾向に形を合わせたモデルであり、
+    特定の調査の実測値そのものではありません。
+  </p>
+
+  <h2>使用している統計と出典</h2>
+  <ul class="srcs" id="aboutSrcList"></ul>
+
+  <h2>生命表の再現精度</h2>
+  <p>
+    公表されている統計値にフィッティングしたモデルであるため、完全な再現ではありません。
+    公表値との誤差は、平均余命で最大 <b>0.065年</b>、生存割合で最大 <b>0.24ポイント</b> です。
+    日常の感覚で使う分には無視できる差ですが、厳密な数値が必要な用途には向きません。
+  </p>
+
+  <h2>運営者情報</h2>
+  <!-- TODO: 運営者名。正式名称が決まったら、全ページのこの箇所を差し替えること -->
+  <p>
+    本サイト「あと何回。運営」は、個人が趣味と関心にもとづいて運営しています。
+    法人ではなく、個人での運営であることを隠さずお伝えします。
+    統計の扱いや計算方法については誠実であるよう努めていますが、誤りに気づかれた場合は
+    <a href="contact.html">お問い合わせ</a>からご指摘いただけると助かります。
+  </p>
+
+  <p class="updated">制定日：2026年8月15日</p>
+</section>
+</div>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <div class="foot__top">
+      <p class="foot__name">あと何回。</p>
+      <p class="foot__tagline">国の統計から、人生の残り回数を数える計算機です。</p>
+    </div>
+
+    <ul class="foot__nav">
+      <li><a href="about.html">このサイトについて</a></li>
+      <li><a href="privacy.html">プライバシーポリシー</a></li>
+      <li><a href="terms.html">利用規約</a></li>
+      <li><a href="disclaimer.html">免責事項</a></li>
+      <li><a href="contact.html">お問い合わせ</a></li>
+    </ul>
+
+    <h2 class="foot__h">計算の根拠</h2>
+    <div class="foot__cols">
+      <div>
+        <h3>使っている統計</h3>
+        <ul class="srcs" id="srcList"></ul>
+      </div>
+      <div>
+        <h3>計算のしかた</h3>
+        <p>厚生労働省「令和6年簡易生命表」の平均余命と生存割合に適合させた死亡率モデルから、0〜110歳の各年齢の生存率 l(x) を作成しています。再現誤差は平均余命で最大0.065年です。</p>
+        <p>人に会える残り回数は、平均余命の引き算ではなく<b>「あなたと相手が同時に生きている確率」を時間で積分</b>して求めています。相手が先に亡くなる可能性も、あなたが先に亡くなる可能性も含まれます。</p>
+        <p>年齢による頻度の変化を含む項目は、各種調査で観察される傾向に形を合わせたモデルです。実測値そのものではないため、目安としてお使いください。</p>
+      </div>
+      <div>
+        <h3>あつかい</h3>
+        <p>入力内容はすべてブラウザの中だけで計算され、サーバーに送信も保存もされません。cookieも使っていません。</p>
+        <p>結果は統計上の期待値です。個人の寿命を予測するものでも、医学的な助言でもありません。</p>
+      </div>
+    </div>
+
+    <p class="foot__notice">本サイトの計算結果は統計上の期待値であり、個人の寿命を予測するものではありません。</p>
+
+    <div class="foot__bottom">
+      <!-- TODO: 運営者名。正式名称が決まったら、全ページのこの箇所を差し替えること -->
+      <span>© 2026 あと何回。運営</span>
+      <span>終わりを数えると、今が濃くなる。</span>
+    </div>
+  </div>
+</footer>
+
+<script src="assets/js/data.js"></script>
+<script>
+(function () {
+  var html = Object.keys(SOURCES).map(function (k) {
+    return '<li><a href="' + SOURCES[k].url + '" target="_blank" rel="noopener">' + SOURCES[k].label + '</a></li>';
+  }).join('');
+  document.getElementById('srcList').innerHTML = html;
+  var about = document.getElementById('aboutSrcList');
+  if (about) about.innerHTML = html;
+})();
+</script>
+</body>
+</html>
