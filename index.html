@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>あと何回。｜人生の残り回数を、国の統計で数える</title>
+<meta name="description" content="あなたに残された週末は、何回か。親に会えるのは、あと何回か。厚生労働省の生命表をもとに、人生の残り回数を計算します。入力はすべてブラウザ内で完結し、どこにも送信されません。">
+<meta name="theme-color" content="#131C40">
+<link rel="canonical" href="https://atonankai.com/">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="あと何回。">
+<meta property="og:title" content="あと何回。｜人生の残り回数を、国の統計で数える">
+<meta property="og:description" content="あなたに残された週末は、何回か。厚生労働省の生命表をもとに計算します。">
+<meta property="og:url" content="https://atonankai.com/">
+<meta property="og:image" content="https://atonankai.com/assets/img/ogp.png">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Dela+Gothic+One&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+<!-- リソグラフ風の紙目テクスチャ -->
+<div class="grain" aria-hidden="true"></div>
+
+<!-- ============ 表紙 ============ -->
+<header class="cover" id="cover">
+  <div class="cover__inner">
+    <p class="eyebrow">人生の残量計算機</p>
+    <h1 class="logo" data-shadow="あと何回。">あと何回。</h1>
+    <p class="cover__lead">
+      あなたに残された週末は、何回だろう。<br>
+      親に会えるのは、あと何回だろう。
+    </p>
+    <p class="cover__body">
+      厚生労働省の生命表から起こした生存率曲線で、あなたの残りを数えます。<br>
+      平均寿命からの引き算ではありません。
+    </p>
+    <button class="btn btn--go" type="button" data-go="basic">数えはじめる</button>
+    <ul class="cover__trust">
+      <li>入力は端末内で計算。<b>どこにも送信されません</b></li>
+      <li>登録・メール不要</li>
+      <li>出典はすべて公開</li>
+    </ul>
+  </div>
+  <div class="cover__clock" aria-hidden="true"><div id="coverClock"></div></div>
+</header>
+
+<noscript>
+  <div class="wrap" style="padding:3rem 0">
+    <p class="note">このサイトは、入力内容をあなたの端末の中だけで計算しています。そのためJavaScriptが必要です。ブラウザの設定で有効にしてから、もう一度開いてください。</p>
+  </div>
+</noscript>
+
+<main>
+
+<!-- ============ STEP 1 基本 ============ -->
+<section class="screen" id="screen-basic" hidden>
+  <div class="wrap">
+    <p class="step">01 — あなたのこと</p>
+    <h2 class="h2">まず、この3つだけ。</h2>
+
+    <div class="field">
+      <label class="label" for="birth">生年月日</label>
+      <input class="input" type="date" id="birth" min="1900-01-01">
+      <p class="hint" id="ageHint"></p>
+    </div>
+
+    <div class="field">
+      <span class="label">性別</span>
+      <p class="hint">生命表が男女別のため必要です。回答しない場合は男女の平均で計算します。</p>
+      <div class="choices" role="radiogroup" aria-label="性別">
+        <button class="chip" type="button" data-sex="female">女性</button>
+        <button class="chip" type="button" data-sex="male">男性</button>
+        <button class="chip" type="button" data-sex="na">答えない</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="label" for="target">何歳まで生きるつもりですか</label>
+      <p class="hint">初期値は日本人の平均寿命です。自分の実感で動かしてください。</p>
+      <div class="slider">
+        <input type="range" id="target" min="40" max="110" step="1" value="84">
+        <output class="slider__out"><b id="targetVal">84</b><span>歳</span></output>
+      </div>
+      <p class="note" id="reachNote"></p>
+    </div>
+
+    <div class="actions">
+      <button class="btn" type="button" data-go="pick" id="toPick" disabled>次へ</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ STEP 2 項目選択 ============ -->
+<section class="screen" id="screen-pick" hidden>
+  <div class="wrap">
+    <p class="step">02 — 数えるもの</p>
+    <h2 class="h2">何の残りを、知りたいですか。</h2>
+    <p class="lead">全部でも、ひとつだけでも。あとから追加もできます。</p>
+
+    <div class="picks" id="picks"></div>
+
+    <div class="actions actions--sticky">
+      <button class="btn btn--ghost" type="button" id="pickAll">全部数える（約3分）</button>
+      <button class="btn" type="button" data-go="detail" id="toDetail" disabled>質問へ進む</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ STEP 3 詳細質問 ============ -->
+<section class="screen" id="screen-detail" hidden>
+  <div class="wrap">
+    <p class="step">03 — 暮らしのこと</p>
+    <h2 class="h2">いまの暮らしを、教えてください。</h2>
+    <p class="lead">わからない項目は空欄のままで構いません。平均値で計算します。</p>
+    <div id="questions"></div>
+    <div class="actions actions--sticky">
+      <button class="btn btn--ghost" type="button" data-go="pick">戻る</button>
+      <button class="btn" type="button" id="toResult">結果を見る</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 結果 ============ -->
+<section class="screen result" id="screen-result" hidden>
+  <div class="wrap">
+
+    <div class="hero" id="hero">
+      <p class="hero__eyebrow">あなたの人生の時刻は</p>
+      <div class="hero__clock" id="heroClock"></div>
+      <p class="hero__time"><b id="clockText">--:--</b></p>
+      <p class="hero__sub" id="clockSub"></p>
+    </div>
+
+    <div class="headline">
+      <p class="headline__label">残された週末</p>
+      <p class="headline__num"><b id="weekendNum">0</b><span>回</span></p>
+      <div class="dots" id="weekendDots" aria-hidden="true"></div>
+      <p class="headline__note" id="weekendNote"></p>
+    </div>
+
+    <div class="cards" id="cards"></div>
+
+    <div class="share" id="share">
+      <h3 class="share__h">この数字を、誰かに。</h3>
+      <p class="share__lead">結果の画像をつくって送れます。相手も自分の数字を出せます。</p>
+      <div class="share__grid">
+        <button class="btn btn--x" type="button" id="shareX">Xに投稿</button>
+        <button class="btn btn--line" type="button" id="shareLine">LINEで送る</button>
+        <button class="btn btn--img" type="button" id="shareImg">画像を保存</button>
+        <button class="btn btn--ghost" type="button" id="shareCopy">リンクをコピー</button>
+      </div>
+      <canvas id="shareCanvas" width="1080" height="1350" hidden></canvas>
+      <p class="share__status" id="shareStatus" role="status"></p>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn--ghost" type="button" data-go="pick">項目を追加する</button>
+      <button class="btn btn--ghost" type="button" data-go="basic">条件を変える</button>
+    </div>
+
+    <!-- 大人のページへの導線 -->
+    <div class="adultgate" id="adultgate">
+      <p class="adultgate__tag">18歳以上のかたへ</p>
+      <h3 class="adultgate__h">パートナーと過ごせる夜は、あと何回か。</h3>
+      <p class="adultgate__lead">
+        日本の既婚者の<b>68.2%</b>がセックスレス傾向にあります。
+        触れにくい話題ですが、これも確実に減っていく回数です。
+        同じ生存率曲線と、年齢別の頻度データで計算します。
+      </p>
+      <button class="btn btn--adult" type="button" id="adultOpen">18歳以上です・開く</button>
+      <p class="adultgate__note">性的に露骨な描写は含みません。統計と計算だけを扱います。</p>
+    </div>
+
+    <div id="adultResult" hidden></div>
+  </div>
+</section>
+
+</main>
+
+<!-- ============ 出典 ============ -->
+<footer class="foot">
+  <div class="wrap">
+    <h2 class="foot__h">計算の根拠</h2>
+    <div class="foot__cols">
+      <div>
+        <h3>使っている統計</h3>
+        <ul class="srcs" id="srcList"></ul>
+      </div>
+      <div>
+        <h3>計算のしかた</h3>
+        <p>厚生労働省「令和6年簡易生命表」の平均余命と生存割合に適合させた死亡率モデルから、0〜110歳の各年齢の生存率 l(x) を作成しています。再現誤差は平均余命で最大0.065年です。</p>
+        <p>人に会える残り回数は、平均余命の引き算ではなく<b>「あなたと相手が同時に生きている確率」を時間で積分</b>して求めています。相手が先に亡くなる可能性も、あなたが先に亡くなる可能性も含まれます。</p>
+        <p>年齢による頻度の変化を含む項目は、各種調査で観察される傾向に形を合わせたモデルです。実測値そのものではないため、目安としてお使いください。</p>
+      </div>
+      <div>
+        <h3>あつかい</h3>
+        <p>入力内容はすべてブラウザの中だけで計算され、サーバーに送信も保存もされません。cookieも使っていません。</p>
+        <p>結果は統計上の期待値です。個人の寿命を予測するものでも、医学的な助言でもありません。</p>
+      </div>
+    </div>
+    <p class="foot__sign">あと何回。 — 終わりを数えると、今が濃くなる。</p>
+  </div>
+</footer>
+
+<script src="assets/js/data.js"></script>
+<script src="assets/js/calc.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>
