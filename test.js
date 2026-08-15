@@ -73,7 +73,7 @@ function loadPage(file) {
   const combined = scripts
     .map(s => s.getAttribute('src'))
     .filter(src => !/^https?:/.test(src))
-    .map(src => fs.readFileSync(rp(src), 'utf8'))
+    .map(src => fs.readFileSync(rp(src.replace(/\?.*$/, '')), 'utf8'))
     .join('\n;\n');
   window.eval(combined);
   return dom;
