@@ -3,7 +3,7 @@
   "private": true,
   "description": "あと何回。— 人生の残り回数を国の統計で数える静的サイト",
   "scripts": {
-    "test": "node test.js && node verify_clock.js"
+    "test": "node test.js && node verify_clock.js && node date_select_test.js"
   },
   "devDependencies": {
     "jsdom": "^30.0.1"
