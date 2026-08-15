@@ -443,9 +443,9 @@ section('デザイントークン');
 {
   const css = read('assets/css/style.css');
   const tokens = {
-    '--slate': '#17201D', '--slate-deep': '#101715', '--slate-soft': '#1F2A26',
-    '--chalk': '#EDEAE0', '--chalk-dim': '#9AA5A0', '--chalk-faint': '#4A5751',
-    '--accent': '#D9C86A', '--accent-2': '#C98C7A', '--accent-3': '#8FB4B0'
+    '--paper': '#FAFAF7', '--paper-deep': '#F2F0E9',
+    '--ink': '#14181C', '--ink-soft': '#5A6169', '--hairline': '#D8D4C8',
+    '--formula': '#B9B2A0', '--accent': '#1F3A5F', '--accent-warm': '#9C4B32'
   };
   Object.keys(tokens).forEach(k => {
     test('カラートークン ' + k + ' が仕様通り', () => {
@@ -458,15 +458,25 @@ section('デザイントークン');
     assert(!/4px\s+4px\s+0/.test(css), '旧スタイルのbox-shadowが残っている');
   });
 
-  test('Dela Gothic One（旧フォント）が使われていない', () => {
-    assert(!/Dela Gothic One/.test(css) && !/Dela Gothic One/.test(read('index.html')),
-      'Dela Gothic Oneがまだ参照されている');
+  test('旧フォント（Dela Gothic One / Caveat）が使われていない', () => {
+    ['index.html', 'about.html', 'privacy.html', 'terms.html', 'disclaimer.html', 'contact.html']
+      .concat(['assets/css/style.css'])
+      .forEach(f => {
+        const content = read(f);
+        assert(!/Dela Gothic One/.test(content), f + ' に Dela Gothic One が残っている');
+        assert(!/Caveat/.test(content), f + ' に Caveat が残っている');
+      });
+  });
+
+  test('旧配色トークン（--slate系・--chalk系）が残っていない', () => {
+    assert(!/--slate\b/.test(css), '--slate系のトークンが残っている');
+    assert(!/--chalk\b/.test(css), '--chalk系のトークンが残っている');
   });
 
   ['index.html', 'about.html', 'privacy.html', 'terms.html', 'disclaimer.html', 'contact.html'].forEach(f => {
     test(f + ' が指定フォント一式を読み込んでいる', () => {
       const html = read(f);
-      ['Shippori+Mincho+B1', 'Zen+Kaku+Gothic+New', 'Outfit', 'Roboto+Mono', 'Caveat'].forEach(fam => {
+      ['Shippori+Mincho+B1', 'Zen+Kaku+Gothic+New', 'Outfit', 'Roboto+Mono', 'EB+Garamond'].forEach(fam => {
         assert(html.indexOf(fam) !== -1, f + ' に ' + fam + ' が見つからない');
       });
     });

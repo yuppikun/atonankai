@@ -790,46 +790,46 @@ async function buildImage() {
     } catch (e) { /* 読めなくても代替フォントで描画する */ }
   }
 
-  x.fillStyle = '#17201D'; x.fillRect(0, 0, W, H);
+  x.fillStyle = '#FAFAF7'; x.fillRect(0, 0, W, H);
   x.textAlign = 'center';
 
-  x.fillStyle = '#D9C86A';
+  x.fillStyle = '#1F3A5F';
   x.font = '500 30px "Roboto Mono", monospace';
   x.fillText('A T O N A N K A I', W / 2, 150);
 
-  x.fillStyle = '#EDEAE0';
+  x.fillStyle = '#14181C';
   x.font = '800 58px "Shippori Mincho B1", serif';
   x.fillText('私に残された週末は', W / 2, 300);
 
-  x.fillStyle = '#D9C86A';
+  x.fillStyle = '#1F3A5F';
   x.font = '200 260px Outfit, sans-serif';
   x.fillText(fmt(shareState.weekends), W / 2, 560);
 
-  x.fillStyle = '#EDEAE0';
+  x.fillStyle = '#14181C';
   x.font = '800 60px "Shippori Mincho B1", serif';
   x.fillText('回', W / 2, 660);
 
   /* 経過バー */
   const barW = 820, barH = 10, barX = (W - barW) / 2, barY = 760;
   const spentRatio = Math.min(1, Math.max(0, S.age / (S.targetAge || 84)));
-  x.fillStyle = '#3A4741';
+  x.fillStyle = '#D8D4C8';
   x.fillRect(barX, barY, barW, barH);
-  x.fillStyle = '#C98C7A';
+  x.fillStyle = '#9C4B32';
   x.fillRect(barX, barY, barW * spentRatio, barH);
 
-  x.fillStyle = '#9AA5A0';
+  x.fillStyle = '#5A6169';
   x.font = '400 26px "Roboto Mono", monospace';
   x.fillText('生まれた日から、' + (S.targetAge || 84) + '歳までの道のり', W / 2, 830);
 
   /* 人生の時刻 */
-  x.fillStyle = '#9AA5A0';
+  x.fillStyle = '#5A6169';
   x.font = '500 28px "Roboto Mono", monospace';
   x.fillText('人生の時刻', W / 2, 1145);
-  x.fillStyle = '#D9C86A';
+  x.fillStyle = '#1F3A5F';
   x.font = '200 118px Outfit, sans-serif';
   x.fillText(shareState.clock ? shareState.clock.text : '--:--', W / 2, 1250);
 
-  x.fillStyle = '#EDEAE0';
+  x.fillStyle = '#14181C';
   x.font = '800 34px "Shippori Mincho B1", serif';
   x.fillText('あと何回。', W / 2, 1315);
 
@@ -923,7 +923,7 @@ $('#srcList').innerHTML = Object.keys(SOURCES).map(k =>
   '<li><a href="' + SOURCES[k].url + '" target="_blank" rel="noopener">' +
   SOURCES[k].label + '</a></li>').join('');
 
-/* ---------- 表紙：背景の数式（黒板の落書き） ---------- */
+/* ---------- 表紙：背景の数式（論文の余白に薄く組まれた印字） ---------- */
 
 const REQUIRED_EQS = [
   'e(x) = ∫₀^∞ l(x+t) / l(x) dt',
@@ -940,6 +940,28 @@ const FILLER_EQS = [
   '81.09', '87.13', '72.57', '75.45', 'l(65) = 0.896', 'l(90) = 0.258'
 ];
 
+/* 数式は画面上端・下端・左右の余白に寄せて配置し、中央（題字とリード文の帯）の
+   可読性を最優先する。縁帯からランダムに1つを選んで配置する。
+   モバイル幅では左右に実質的な余白が無いため、上端・下端の帯のみを使う。 */
+function eqEdgePosition(isMobile) {
+  const bands = isMobile
+    ? [
+        { xMin: 3, xMax: 97, yMin: 2,  yMax: 13 },  // 上端
+        { xMin: 3, xMax: 97, yMin: 88, yMax: 98 }   // 下端
+      ]
+    : [
+        { xMin: 3,  xMax: 97, yMin: 2,  yMax: 12 },  // 上端
+        { xMin: 3,  xMax: 97, yMin: 88, yMax: 98 },  // 下端
+        { xMin: 2,  xMax: 11, yMin: 14, yMax: 86 },  // 左端
+        { xMin: 89, xMax: 98, yMin: 14, yMax: 86 }   // 右端
+      ];
+  const b = bands[Math.floor(Math.random() * bands.length)];
+  return {
+    x: b.xMin + Math.random() * (b.xMax - b.xMin),
+    y: b.yMin + Math.random() * (b.yMax - b.yMin)
+  };
+}
+
 function buildEqBg() {
   const host = $('#eqBg');
   if (!host) return;
@@ -949,16 +971,10 @@ function buildEqBg() {
   for (let i = 0; i < extra; i++) items.push(FILLER_EQS[i % FILLER_EQS.length]);
 
   const frag = document.createDocumentFragment();
-  items.forEach((text, i) => {
-    const avoidCenter = i >= REQUIRED_EQS.length;
-    let x, y, tries = 0;
-    do {
-      x = Math.random() * 92 + 2;
-      y = Math.random() * 92 + 2;
-      tries++;
-    } while (avoidCenter && tries < 6 && x > 26 && x < 74 && y > 30 && y < 70);
-    const rot = (Math.random() * 8 - 4).toFixed(1);
-    const op = (0.06 + Math.random() * 0.04).toFixed(3);
+  items.forEach(text => {
+    const { x, y } = eqEdgePosition(isMobile);
+    const rot = (Math.random() * 2 - 1).toFixed(2); // -1deg〜1deg のごく微小な範囲
+    const op = (0.35 + Math.random() * 0.15).toFixed(3);
     const size = (0.95 + Math.random() * 0.7).toFixed(2);
     const span = el('span', 'eq', esc(text));
     span.style.left = x + '%';
