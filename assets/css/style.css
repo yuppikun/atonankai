@@ -302,8 +302,18 @@ a{color:var(--accent)}
   font-family:var(--f-mono);font-size:.7rem;letter-spacing:.28em;
   color:var(--ink-soft);margin:0 0 1.5rem;
 }
-.hero__clock{width:min(72vw,300px);margin:0 auto 1.2rem}
-.hero__clock svg{width:100%;height:auto;display:block}
+.hero__clock{margin:0 auto 1.2rem}
+.hero__clockrow{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.3rem}
+.hero__clockface{width:min(66vw,240px);flex:none}
+.hero__clockface svg{width:100%;height:auto;display:block}
+.hero__hourglass{width:min(34vw,140px);flex:none;text-align:center}
+.hero__hourglass svg{width:100%;height:auto;display:block;margin:0 auto}
+.hero__hourglass-note{margin:.55rem 0 0;font-size:.72rem;line-height:1.6;color:var(--ink-soft)}
+@media (min-width:720px){
+  .hero__clockrow{flex-direction:row;gap:2.6rem}
+  .hero__clockface{width:230px}
+  .hero__hourglass{width:110px}
+}
 .hero__time{margin:0;display:flex;align-items:baseline;justify-content:center;gap:.6em}
 .hero__time b{
   font-family:var(--f-num);font-weight:300;

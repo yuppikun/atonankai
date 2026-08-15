@@ -383,9 +383,23 @@ function renderQuestions() {
 
 $('#toResult').addEventListener('click', () => go('result'));
 
-/* ---------- 人生時計 SVG（外側：12時間アナログ時計／内側：砂時計） ---------- */
+/* ---------- 人生時計（アナログ時計）と砂時計を、横並びの別要素として描画 ----------
+   ・時計と砂時計は入れ子にせず、隣接する別々の <svg> として描く
+   ・色は CSS変数の解決に依存せず、style.css の :root と同じ実カラーコードを直接埋め込む
+     （var(--chalk) 等、定義されていない変数を指定していたために描画されない不具合があったため）
+*/
 
-function heroClockSVG(clock) {
+const CLOCK_COLOR = {
+  ink: '#14181C',
+  inkSoft: '#5A6169',
+  hairline: '#D8D4C8',
+  accent: '#1F3A5F',
+  accentWarm: '#9C4B32',
+  paper: '#FAFAF7'
+};
+
+function clockFaceSVG(clock) {
+  const C = CLOCK_COLOR;
   const cx = 120, cy = 120, R = 100;
   const hour12 = clock.hour % 12;
   const hourAngle = (hour12 + clock.minute / 60) / 12 * 360;
@@ -395,53 +409,100 @@ function heroClockSVG(clock) {
     const rad = (deg - 90) * Math.PI / 180;
     return [cx + r * Math.cos(rad), cy + r * Math.sin(rad)];
   };
-  const [hx, hy] = toXY(hourAngle, 42);
-  const [mx, my] = toXY(minAngle, 62);
 
-  const numerals = { 0: '12', 3: '3', 6: '6', 9: '9' };
+  /* 1. 外周のリング */
+  const ring = `<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="${C.inkSoft}" stroke-width="2"/>`;
+
+  /* 2. 目盛り（12方向。3時間ごとは長く・太く） */
   let ticks = '';
   for (let i = 0; i < 12; i++) {
     const deg = i * 30;
-    if (numerals[i] != null) {
-      const [tx, ty] = toXY(deg, 78);
-      ticks += `<text x="${tx.toFixed(1)}" y="${(ty + 5).toFixed(1)}" text-anchor="middle" font-family="Outfit,sans-serif" font-size="15" font-weight="300" fill="var(--chalk-dim)">${numerals[i]}</text>`;
-    } else {
-      const [x1, y1] = toXY(deg, 88);
-      const [x2, y2] = toXY(deg, 96);
-      ticks += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="var(--chalk-faint)" stroke-width="1.5"/>`;
-    }
+    const major = i % 3 === 0;
+    const [x1, y1] = toXY(deg, major ? 84 : 90);
+    const [x2, y2] = toXY(deg, 96);
+    ticks += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${major ? C.inkSoft : C.hairline}" stroke-width="${major ? 2 : 1}" stroke-linecap="round"/>`;
   }
 
-  /* 砂時計（内側）。上の砂＝残り、下の砂＝過ぎた分。ratio と必ず一致させる */
-  const gTop = 90, gMid = 120, gBot = 150, halfW = 28, neckW = 3;
+  /* 3. 数字 12 / 3 / 6 / 9 */
+  const numerals = { 0: '12', 3: '3', 6: '6', 9: '9' };
+  let numText = '';
+  Object.keys(numerals).forEach(k => {
+    const deg = Number(k) * 30;
+    const [tx, ty] = toXY(deg, 68);
+    numText += `<text x="${tx.toFixed(1)}" y="${ty.toFixed(1)}" text-anchor="middle" dominant-baseline="central" font-family="Outfit,sans-serif" font-size="16" font-weight="400" fill="${C.inkSoft}">${numerals[k]}</text>`;
+  });
+
+  /* 4. 長針（細く長い。半径の0.72倍） */
+  const [mx, my] = toXY(minAngle, R * 0.72);
+  const minuteHand = `<line data-role="minute" data-angle="${minAngle.toFixed(3)}" x1="${cx}" y1="${cy}" x2="${mx.toFixed(1)}" y2="${my.toFixed(1)}" stroke="${C.accent}" stroke-width="2.5" stroke-linecap="round"/>`;
+
+  /* 5. 短針（太く短い。半径の0.48倍） */
+  const [hx, hy] = toXY(hourAngle, R * 0.48);
+  const hourHand = `<line data-role="hour" data-angle="${hourAngle.toFixed(3)}" x1="${cx}" y1="${cy}" x2="${hx.toFixed(1)}" y2="${hy.toFixed(1)}" stroke="${C.ink}" stroke-width="4" stroke-linecap="round"/>`;
+
+  /* 6. 中心のドット（針の根元を隠す。最後に描く） */
+  const hub = `<circle cx="${cx}" cy="${cy}" r="5" fill="${C.accent}" stroke="${C.paper}" stroke-width="1.5"/>`;
+
+  /* 針は必ず最後（他要素より手前）に描く */
+  return `<svg viewBox="0 0 240 240" role="img" aria-label="人生の時刻 ${clock.text}">
+    ${ring}
+    ${ticks}
+    ${numText}
+    ${minuteHand}
+    ${hourHand}
+    ${hub}
+  </svg>`;
+}
+
+function hourglassSVG(clock) {
+  const C = CLOCK_COLOR;
+  const cx = 60, gTop = 20, gMid = 100, gBot = 180, halfW = 40, neckW = 5;
   const ratio = Math.min(1, Math.max(0, clock.ratio));
   const leftAt = (t, w0, w1) => cx - (w0 + t * (w1 - w0));
   const rightAt = (t, w0, w1) => cx + (w0 + t * (w1 - w0));
 
-  const t0 = ratio; // 上の砂の表面（ネック側からratio分だけ下がる＝残りが減る）
+  /* 1. 砂時計の輪郭。砂の量に関係なく常に描く */
+  const outline = `<path d="M ${cx - halfW} ${gTop} L ${cx + halfW} ${gTop} L ${cx + neckW} ${gMid} L ${cx + halfW} ${gBot} L ${cx - halfW} ${gBot} L ${cx - neckW} ${gMid} Z" fill="none" stroke="${C.inkSoft}" stroke-width="2.5" stroke-linejoin="round"/>`;
+
+  /* 2. 上下の枠（キャップ）。常に描く */
+  const caps =
+    `<line x1="${cx - halfW - 8}" y1="${gTop}" x2="${cx + halfW + 8}" y2="${gTop}" stroke="${C.inkSoft}" stroke-width="4" stroke-linecap="round"/>` +
+    `<line x1="${cx - halfW - 8}" y1="${gBot}" x2="${cx + halfW + 8}" y2="${gBot}" stroke="${C.inkSoft}" stroke-width="4" stroke-linecap="round"/>`;
+
+  /* 3. 上の砂（残り）。ratioが1に近づくほど減る */
+  const t0 = ratio;
   const topSurfaceY = gTop + t0 * (gMid - gTop);
-  const topSand = ratio >= 0.999 ? '' : `<path d="M ${leftAt(t0, halfW, neckW).toFixed(1)} ${topSurfaceY.toFixed(1)} L ${rightAt(t0, halfW, neckW).toFixed(1)} ${topSurfaceY.toFixed(1)} L ${(cx + neckW).toFixed(1)} ${gMid} L ${(cx - neckW).toFixed(1)} ${gMid} Z" fill="var(--accent)" opacity=".85"/>`;
+  const topSand = ratio >= 0.999 ? '' : `<path d="M ${leftAt(t0, halfW, neckW).toFixed(1)} ${topSurfaceY.toFixed(1)} L ${rightAt(t0, halfW, neckW).toFixed(1)} ${topSurfaceY.toFixed(1)} L ${(cx + neckW).toFixed(1)} ${gMid} L ${(cx - neckW).toFixed(1)} ${gMid} Z" fill="${C.accentWarm}" opacity=".3"/>`;
 
-  const s0 = 1 - ratio; // 下の砂の表面（底からratio分だけ積み上がる＝過ぎた分が増える）
+  /* 4. 下の砂（経過）。ratioが1に近づくほど増える */
+  const s0 = 1 - ratio;
   const botSurfaceY = gMid + s0 * (gBot - gMid);
-  const botSand = ratio <= 0.001 ? '' : `<path d="M ${leftAt(s0, neckW, halfW).toFixed(1)} ${botSurfaceY.toFixed(1)} L ${rightAt(s0, neckW, halfW).toFixed(1)} ${botSurfaceY.toFixed(1)} L ${rightAt(1, neckW, halfW).toFixed(1)} ${gBot} L ${leftAt(1, neckW, halfW).toFixed(1)} ${gBot} Z" fill="var(--accent-2)" opacity=".85"/>`;
+  const botSand = ratio <= 0.001 ? '' : `<path d="M ${leftAt(s0, neckW, halfW).toFixed(1)} ${botSurfaceY.toFixed(1)} L ${rightAt(s0, neckW, halfW).toFixed(1)} ${botSurfaceY.toFixed(1)} L ${rightAt(1, neckW, halfW).toFixed(1)} ${gBot} L ${leftAt(1, neckW, halfW).toFixed(1)} ${gBot} Z" fill="${C.accentWarm}" opacity=".85"/>`;
 
+  /* 5. 落ちている砂の筋（任意） */
   const stream = (ratio > 0.001 && ratio < 0.999)
-    ? `<line x1="${cx}" y1="${gMid - 5}" x2="${cx}" y2="${gMid + 5}" stroke="var(--accent)" stroke-width="1" opacity=".8"/>` : '';
+    ? `<line x1="${cx}" y1="${gMid - 6}" x2="${cx}" y2="${gMid + 6}" stroke="${C.accentWarm}" stroke-width="1.5" opacity=".8"/>` : '';
 
-  const glassOutline =
-    `<path d="M ${cx - halfW} ${gTop} L ${cx + halfW} ${gTop} L ${cx + neckW} ${gMid} L ${cx + halfW} ${gBot} L ${cx - halfW} ${gBot} L ${cx - neckW} ${gMid} Z" fill="none" stroke="var(--chalk)" stroke-width="1.5" stroke-linejoin="round"/>` +
-    `<line x1="${cx - halfW - 6}" y1="${gTop}" x2="${cx + halfW + 6}" y2="${gTop}" stroke="var(--chalk)" stroke-width="2" stroke-linecap="round"/>` +
-    `<line x1="${cx - halfW - 6}" y1="${gBot}" x2="${cx + halfW + 6}" y2="${gBot}" stroke="var(--chalk)" stroke-width="2" stroke-linecap="round"/>`;
-
-  return `<svg viewBox="0 0 240 240" role="img" aria-label="人生の時刻 ${clock.text}">
-    <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="var(--chalk-faint)" stroke-width="1.5"/>
-    ${ticks}
-    <g class="sand-fall" data-ratio="${ratio.toFixed(6)}">${topSand}${botSand}${stream}${glassOutline}</g>
-    <line data-role="hour" data-angle="${hourAngle.toFixed(3)}" x1="${cx}" y1="${cy}" x2="${hx.toFixed(1)}" y2="${hy.toFixed(1)}" stroke="var(--chalk)" stroke-width="3" stroke-linecap="round"/>
-    <line data-role="minute" data-angle="${minAngle.toFixed(3)}" x1="${cx}" y1="${cy}" x2="${mx.toFixed(1)}" y2="${my.toFixed(1)}" stroke="var(--chalk)" stroke-width="2" stroke-linecap="round"/>
-    <circle cx="${cx}" cy="${cy}" r="3" fill="var(--accent)"/>
+  return `<svg viewBox="0 0 120 200" role="img" aria-label="人生の砂時計 経過${(ratio * 100).toFixed(1)}%">
+    ${outline}
+    ${caps}
+    <g class="sand-fall" data-ratio="${ratio.toFixed(6)}">
+      ${topSand}
+      ${botSand}
+      ${stream}
+    </g>
   </svg>`;
+}
+
+function heroClockSVG(clock) {
+  const ratio = Math.min(1, Math.max(0, clock.ratio));
+  return `<div class="hero__clockrow">
+    <div class="hero__clockface">${clockFaceSVG(clock)}</div>
+    <div class="hero__hourglass">
+      ${hourglassSVG(clock)}
+      <p class="hero__hourglass-note">人生の <b>${fmt(ratio * 100, 1)}%</b> が過ぎました</p>
+    </div>
+  </div>`;
 }
 
 /* ---------- 数字のカウントアップ ---------- */
