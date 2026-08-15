@@ -129,8 +129,16 @@ function loadIndexPage() {
   const html = fs.readFileSync(rp('index.html'), 'utf8');
   const dom = new JSDOM(html, { url: 'https://atonankai.pages.dev/index.html', runScripts: 'dangerously', pretendToBeVisual: true });
   const { window } = dom;
-  window.matchMedia = window.matchMedia || function () {
-    return { matches: false, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {} };
+  /* prefers-reduced-motion は true を返す：結果画面直前の演出（約2秒の
+     非同期シーケンス）をスキップさせ、このテストが検証したい「時計の
+     針・砂時計・表示時刻の数学的な一致」を同期的に検証できるようにする。
+     演出そのものの見た目は Playwright の目視確認で別途確認している。 */
+  window.matchMedia = window.matchMedia || function (q) {
+    return {
+      matches: /prefers-reduced-motion/.test(String(q)),
+      media: String(q),
+      addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {}
+    };
   };
   window.HTMLElement.prototype.scrollIntoView = function () {};
   window.scrollTo = function () {};

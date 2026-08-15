@@ -394,7 +394,236 @@ function renderQuestions() {
   }
 }
 
-$('#toResult').addEventListener('click', () => go('result'));
+/* ---------- 結果表示前の演出：離散→収束→閃光→結実 ---------- */
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+
+/* 演出に使う「本人が実際に入力した値」の断片を集める。
+   ダミー文字列は使わず、未入力の項目は単に含めない（水増ししない）。 */
+function collectRevealFragments() {
+  const frags = [];
+  if (S.birth) {
+    frags.push(S.birth.getFullYear() + '.' + pad2(S.birth.getMonth() + 1) + '.' + pad2(S.birth.getDate()));
+  }
+  frags.push(S.sex === 'male' ? '男性' : S.sex === 'female' ? '女性' : '性別 未回答');
+  frags.push('現在 ' + Math.floor(S.age) + '歳');
+  frags.push('目標 ' + S.targetAge + '歳');
+  if (S.a.sleep != null) frags.push('睡眠 ' + S.a.sleep + '時間/日');
+  if (S.a.meal != null) frags.push('食事 ' + S.a.meal + '回/日');
+  if (S.a.phone != null) frags.push('スマホ ' + S.a.phone + '時間/日');
+  if (S.a.media != null) frags.push('動画 ' + S.a.media + '時間/日');
+  S.a.parents.forEach(p => {
+    if (p.age != null) frags.push((p.label || '親') + ' ' + p.age + '歳');
+    if (p.freq) frags.push(freqLabel(p.freq));
+  });
+  S.a.children.forEach(c => {
+    if (c.age != null) frags.push((c.label || '子') + ' ' + c.age + '歳');
+  });
+  S.a.dears.forEach(d => {
+    if (d.age != null) frags.push((d.label || '大切な人') + ' ' + d.age + '歳');
+    if (d.freq) frags.push(freqLabel(d.freq));
+  });
+  S.a.pets.forEach(p => {
+    if (p.age != null) frags.push((p.label || 'ペット') + ' ' + p.age + '歳');
+  });
+  if (S.picked && S.picked.size) {
+    Array.from(S.picked).forEach(id => {
+      const cat = CATS.find(c => c.id === id);
+      if (cat) frags.push(cat.t);
+    });
+  }
+  return Array.from(new Set(frags.filter(Boolean)));
+}
+
+/* 断片が中心へ吸い寄せられる軌跡に、わずかな弧を描かせるための制御点。 */
+function revealArcControl(dx, dy) {
+  const len = Math.hypot(dx, dy) || 1;
+  const nx = -dy / len, ny = dx / len;
+  const bend = (0.12 + Math.random() * 0.35) * len * (Math.random() < 0.5 ? -1 : 1);
+  return { x: dx * 0.5 + nx * bend, y: dy * 0.5 + ny * bend };
+}
+
+function spawnRevealTrail(overlay, x, y, ctrl, dx, dy, delay) {
+  try {
+    const svgNS = 'http://www.w3.org/2000/svg';
+    let svg = overlay.querySelector('.reveal__trails');
+    if (!svg) {
+      svg = document.createElementNS(svgNS, 'svg');
+      svg.setAttribute('class', 'reveal__trails');
+      overlay.appendChild(svg);
+    }
+    const path = document.createElementNS(svgNS, 'path');
+    path.setAttribute('class', 'reveal__trailpath');
+    path.setAttribute('d', 'M ' + x + ' ' + y + ' Q ' + (x + ctrl.x) + ' ' + (y + ctrl.y) + ' ' + (x + dx) + ' ' + (y + dy));
+    svg.appendChild(path);
+    const len = path.getTotalLength();
+    path.animate(
+      [
+        { strokeDasharray: len, strokeDashoffset: len, opacity: 0 },
+        { strokeDasharray: len, strokeDashoffset: len * 0.35, opacity: 0.45, offset: 0.5 },
+        { strokeDasharray: len, strokeDashoffset: 0, opacity: 0 }
+      ],
+      { duration: 900, delay: delay, easing: 'cubic-bezier(.7,0,.84,0)', fill: 'both' }
+    );
+  } catch (e) { /* 装飾なので失敗しても演出全体には影響させない */ }
+}
+
+/* 各断片は「出現→わずかに保持→弧を描いて中心へ加速しながら収束」を
+   1つの Animation にまとめて実行する（複数アニメーションの合成トラブルを避けるため）。 */
+function spawnRevealFragments(overlay, isMobile) {
+  const frags = collectRevealFragments();
+  const maxCount = isMobile ? 12 : 18;
+  const list = shuffle(frags.slice()).slice(0, maxCount);
+  const n = list.length;
+  if (!n) return;
+
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const cx = vw / 2, cy = vh / 2;
+  const appearMs = 200, convergeMs = 900, totalMs = appearMs + convergeMs;
+  const appearFrac = appearMs / totalMs;
+  const arcFrac = (appearMs + convergeMs * 0.42) / totalMs;
+
+  list.forEach((text, i) => {
+    const angle = (i / n) * Math.PI * 2 + (Math.random() * 0.7 - 0.35);
+    const minR = Math.min(vw, vh) * 0.22;
+    const maxR = Math.min(vw, vh) * 0.32 + Math.max(vw, vh) * 0.14;
+    const radius = minR + Math.random() * (maxR - minR);
+    const x = Math.max(10, Math.min(vw - 10, cx + Math.cos(angle) * radius));
+    const y = Math.max(10, Math.min(vh - 10, cy + Math.sin(angle) * radius));
+
+    const span = el('span', 'reveal__frag', esc(text));
+    span.style.left = x + 'px';
+    span.style.top = y + 'px';
+    span.style.fontFamily = (i % 3 === 0) ? 'var(--f-mono)' : 'var(--f-formula)';
+    overlay.appendChild(span);
+
+    // 実測幅で画面端からのはみ出しを補正する（左端は0px以上、右端は viewport 内に収める）
+    const fw = span.offsetWidth;
+    const clampedX = Math.max(4, Math.min(x, vw - fw - 4));
+    if (clampedX !== x) span.style.left = clampedX + 'px';
+    const dx = cx - clampedX, dy = cy - y;
+    const ctrl = revealArcControl(dx, dy);
+    const delay = Math.min(i * (240 / n), 260);
+
+    if (typeof span.animate !== 'function') return; // Web Animations 非対応環境ではこの断片は装飾を諦める
+    try {
+      span.animate([
+        { offset: 0,         transform: 'translate(0,0) scale(.82)',                          opacity: 0,   easing: 'ease-out' },
+        { offset: appearFrac, transform: 'translate(0,0) scale(1)',                            opacity: 1,   easing: 'cubic-bezier(.6,0,.85,.15)' },
+        { offset: arcFrac,    transform: 'translate(' + ctrl.x + 'px,' + ctrl.y + 'px) scale(.6)', opacity: .7, easing: 'cubic-bezier(.7,0,.84,0)' },
+        { offset: 1,          transform: 'translate(' + dx + 'px,' + dy + 'px) scale(.1)',      opacity: 0 }
+      ], { duration: totalMs, delay: delay, fill: 'both' });
+
+      if (!isMobile) spawnRevealTrail(overlay, clampedX, y, ctrl, dx, dy, delay + appearMs);
+    } catch (e) { /* この断片だけ諦めて、他の断片・全体の演出は続行する */ }
+  });
+}
+
+function spawnRevealFlash(overlay) {
+  const wash = el('div', 'reveal__wash');
+  const rays = el('div', 'reveal__rays');
+  const burst = el('div', 'reveal__burst');
+  for (let i = 0; i < 8; i++) {
+    const ray = el('span', 'reveal__ray');
+    ray.style.transform = 'rotate(' + (i * 45) + 'deg) scaleY(0)';
+    rays.appendChild(ray);
+  }
+  overlay.appendChild(wash);
+  overlay.appendChild(rays);
+  overlay.appendChild(burst);
+
+  wash.animate([{ opacity: 0 }, { opacity: .16, offset: .45 }, { opacity: 0 }],
+    { duration: 260, easing: 'ease-out', fill: 'both' });
+  burst.animate([
+    { transform: 'translate(-50%,-50%) scale(0)', opacity: 1 },
+    { transform: 'translate(-50%,-50%) scale(1)', opacity: 0 }
+  ], { duration: 350, easing: 'cubic-bezier(.15,.7,.3,1)', fill: 'both' });
+  Array.prototype.forEach.call(rays.children, (ray, i) => {
+    const base = 'rotate(' + (i * 45) + 'deg)';
+    ray.animate([
+      { transform: base + ' scaleY(0)', opacity: .8 },
+      { transform: base + ' scaleY(1)', opacity: 0 }
+    ], { duration: 320, delay: i * 6, easing: 'ease-out', fill: 'both' });
+  });
+}
+
+/* 結果画面の要素を、上から順にごく短いディレイで現す。 */
+function staggerResultChildren() {
+  const wrap = $('#screen-result .wrap');
+  if (!wrap) return;
+  Array.prototype.forEach.call(wrap.children, (kid, i) => {
+    if (kid.hidden) return;
+    if (typeof kid.animate !== 'function') return; // Web Animations 非対応環境では通常表示のまま
+    try {
+      kid.style.opacity = '0';
+      kid.animate(
+        [{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'translateY(0)' }],
+        { duration: 420, delay: Math.min(i * 70, 400), easing: 'ease-out', fill: 'both' }
+      );
+      setTimeout(() => { kid.style.opacity = ''; }, Math.min(i * 70, 400) + 440);
+    } catch (e) {
+      kid.style.opacity = '';
+    }
+  });
+}
+
+function runReveal() {
+  if (reducedMotion()) { go('result'); return; }
+
+  let resultShown = false;
+  let overlay = null;
+  const timers = [];
+
+  function showResultNow() {
+    if (resultShown) return;
+    resultShown = true;
+    go('result');
+    // 演出側で個々の要素を段階的に見せるため、go() が付ける画面全体の
+    // フェード（.screen-enter）はここで打ち消し、二重にアニメーションさせない。
+    const resultEl = $('#screen-result');
+    if (resultEl) resultEl.classList.remove('screen-enter');
+    staggerResultChildren();
+  }
+  function teardown() {
+    timers.forEach(clearTimeout);
+    if (overlay && overlay.parentNode) {
+      try { overlay.getAnimations({ subtree: true }).forEach(a => a.cancel()); } catch (e) {}
+      overlay.parentNode.removeChild(overlay);
+    }
+    overlay = null;
+  }
+  function skip() {
+    // showResultNow が例外を投げても teardown は必ず実行する
+    // （＝演出が壊れても結果画面には必ず到達する）。
+    try { showResultNow(); } catch (e) {}
+    teardown();
+  }
+
+  timers.push(setTimeout(skip, 3000)); // 何があっても結果へ進むフォールバック
+
+  try {
+    overlay = el('div', 'reveal');
+    overlay.addEventListener('click', skip);
+    overlay.addEventListener('touchstart', skip, { passive: true });
+    document.body.appendChild(overlay);
+
+    const isMobile = mq('(max-width:719px)');
+    try { spawnRevealFragments(overlay, isMobile); } catch (e) {}
+
+    timers.push(setTimeout(() => { try { if (overlay) spawnRevealFlash(overlay); } catch (e) {} }, 1300));
+    timers.push(setTimeout(() => { try { showResultNow(); } catch (e) {} }, 1450));
+    timers.push(setTimeout(() => {
+      if (!overlay) return;
+      const fade = overlay.animate([{ opacity: 1 }, { opacity: 0 }],
+        { duration: 450, easing: 'ease-out', fill: 'forwards' });
+      fade.onfinish = teardown;
+    }, 1650));
+  } catch (e) {
+    skip();
+  }
+}
+
+$('#toResult').addEventListener('click', runReveal);
 
 /* ---------- 人生時計（アナログ時計）と砂時計を、横並びの別要素として描画 ----------
    ・時計と砂時計は入れ子にせず、隣接する別々の <svg> として描く
@@ -997,59 +1226,182 @@ $('#srcList').innerHTML = Object.keys(SOURCES).map(k =>
   '<li><a href="' + SOURCES[k].url + '" target="_blank" rel="noopener">' +
   SOURCES[k].label + '</a></li>').join('');
 
-/* ---------- 表紙：背景の数式（論文の余白に薄く組まれた印字） ---------- */
+/* ---------- 表紙：背景の数式（論文の余白いっぱいに組まれた印字） ---------- */
 
-/* 数式は「あらかじめ定めた配置スロット」にのみ置く（ランダム配置はしない）。
-   各スロットは left/top（%）と width（%、box-sizing:border-box）を持ち、
-   同じ帯の中でスロット同士の矩形（left〜left+width）が絶対に重ならないよう
-   数値を静的に決め打ちしてある。overflow:hidden + text-overflow:ellipsis を
-   CSS側（.eq）で必ず効かせているため、万一テキストがスロット幅より長くても
-   スロットの外にはみ出さず、隣のスロットと重なることはない。
-   画面幅の中央60%・高さの中央60%が交差する中央帯（題字・リード文・ボタン）
-   には、上端帯／下端帯（y<20%）でも中央寄りのxは避け、左右帯は常にx<20%
-   またはx>80%に収めることで、確実に踏み込まないようにしている。 */
-const EQ_SLOTS_DESKTOP = [
-  // 上端帯（y<20%、常に安全）
-  { t: 'e(x) = ∫₀^∞ l(x+t) / l(x) dt', left: 2,  top: 5,  width: 30, size: 0.95, op: 0.30 },
-  { t: 'q(x) = 1 − e^(−μ(x))',          left: 36, top: 5,  width: 28, size: 0.9,  op: 0.26 },
-  { t: 'S(t) = l(x+t) / l(x)',          left: 68, top: 5,  width: 30, size: 0.9,  op: 0.30 },
-  // 下端帯（y>80%、常に安全）
-  { t: 'l(x) = exp( −∫₀ˣ μ(s) ds )',    left: 2,  top: 91, width: 30, size: 0.95, op: 0.30 },
-  { t: 'N = f · ∫₀^∞ S₁(t)·S₂(t) dt',   left: 36, top: 91, width: 28, size: 0.85, op: 0.26 },
-  { t: 'P(both alive at t) = S₁(t) × S₂(t)', left: 68, top: 91, width: 30, size: 0.8, op: 0.30 },
-  // 左端帯（x<20%、常に安全）
-  { t: 'μ(x) = A + B·e^(Cx)',           left: 2,  top: 34, width: 16, size: 0.85, op: 0.34 },
-  { t: 'l(65) = 0.896',                 left: 2,  top: 62, width: 16, size: 0.85, op: 0.26 },
-  // 右端帯（x>80%、常に安全）
-  { t: 'l(90) = 0.258',                 left: 82, top: 34, width: 16, size: 0.85, op: 0.34 },
-  { t: 'Γ(n) = (n−1)!',                 left: 82, top: 62, width: 16, size: 0.85, op: 0.26 }
+/* このサイトが実際に使う式（このリテラルは test.js が存在チェックしている）。
+   大きめのフォントで、出現頻度は低くする。 */
+const EQ_LONG = [
+  'e(x) = ∫₀^∞ l(x+t) / l(x) dt',
+  'l(x) = exp( −∫₀ˣ μ(s) ds )',
+  'μ(x) = A + B·e^(Cx)',
+  'q(x) = 1 − e^(−μ(x))',
+  'N = f · ∫₀^∞ S₁(t)·S₂(t) dt',
+  'P(both alive at t) = S₁(t) × S₂(t)',
+  'S(t) = l(x+t) / l(x)'
+];
+/* 統計学・確率論・微積分の実在する表現（中サイズ、中頻度）。 */
+const EQ_MED = [
+  'Σ (n=1→∞) 1/n²',
+  'lim (t→∞) S(t) = 0',
+  'E[X] = ∫ x·f(x) dx',
+  'Var(X) = E[X²] − E[X]²',
+  'Γ(n) = (n−1)!',
+  '∂P/∂t = −μ(x)·P',
+  'f(x) = dF(x)/dx',
+  'σ² = E[(X−μ)²]',
+  'P(A∩B) = P(A)·P(B)',
+  'Cov(X,Y) = E[XY] − E[X]E[Y]'
+];
+/* 実測値・短い数値（小さく、最も高頻度）。 */
+const EQ_NUM = [
+  '81.09', '87.13', '72.57', '75.45',
+  'l(65) = 0.896', 'l(90) = 0.258'
 ];
 
-const EQ_SLOTS_MOBILE = [
-  // モバイルは本文にかからないよう、上端・下端のみに2つずつ（縦積み・全幅）
-  { t: 'e(x) = ∫₀^∞ l(x+t) / l(x) dt', left: 4, top: 3,  width: 92, size: 0.85, op: 0.28 },
-  { t: 'μ(x) = A + B·e^(Cx)',          left: 4, top: 9,  width: 92, size: 0.8,  op: 0.26 },
-  { t: 'P = S₁(t) × S₂(t)',            left: 4, top: 88, width: 92, size: 0.85, op: 0.28 },
-  { t: 'l(65) = 0.896',                left: 4, top: 94, width: 92, size: 0.8,  op: 0.26 }
-];
+function pickFrom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
-function buildEqBg() {
+/* サイズ階層：小さいものほど多く出現させる（密度の演出）。
+   不透明度はサイズに応じたベース値 ± ばらつきで、遠近感を出す。 */
+function pickEqItem() {
+  const r = Math.random();
+  let text, sizeMin, sizeMax, opBase;
+  if (r < 0.16) { text = pickFrom(EQ_LONG); sizeMin = 0.86; sizeMax = 1.0;  opBase = 0.30; }
+  else if (r < 0.52) { text = pickFrom(EQ_MED); sizeMin = 0.72; sizeMax = 0.85; opBase = 0.26; }
+  else { text = pickFrom(EQ_NUM); sizeMin = 0.62; sizeMax = 0.75; opBase = 0.22; }
+  const size = sizeMin + Math.random() * (sizeMax - sizeMin);
+  const opacity = Math.min(0.38, Math.max(0.18, opBase + (Math.random() * 0.14 - 0.07)));
+  return { text, size, opacity };
+}
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+  }
+  return arr;
+}
+
+function rectsCollide(a, b, gap) {
+  return !(a.right + gap <= b.left || b.right + gap <= a.left ||
+           a.bottom + gap <= b.top || b.bottom + gap <= a.top);
+}
+
+/* 中央のコンテンツ（題字・リード文・安心の一文・ボタン）を包む .cover__inner の
+   実測バウンディングボックスを「禁止矩形」として使う。パーセンテージによる概算
+   ではなく実測値を使うため、文言や行数が変わっても確実に本文を避けられる。 */
+function eqForbiddenRect(host) {
+  const inner = $('.cover__inner');
+  if (!inner) return null;
+  const hostRect = host.getBoundingClientRect();
+  const innerRect = inner.getBoundingClientRect();
+  const margin = 24;
+  return {
+    left: innerRect.left - hostRect.left - margin,
+    top: innerRect.top - hostRect.top - margin,
+    right: innerRect.right - hostRect.left + margin,
+    bottom: innerRect.bottom - hostRect.top + margin
+  };
+}
+
+function distFromRect(r, f) {
+  const dx = Math.max(f.left - r.right, r.left - f.right, 0);
+  const dy = Math.max(f.top - r.bottom, r.top - f.bottom, 0);
+  return Math.max(dx, dy);
+}
+
+/* 実測配置：候補座標を生成→DOM実測サイズで衝突判定→ダメなら候補を破棄、を
+   1要素につき最大50回試行する。当たり判定はグリッド分割した候補セルを
+   シャッフルして使うことで、高密度でも高い確率で空きスロットに収まる。 */
+function layoutEqBg(host) {
+  host.innerHTML = '';
+  const hostRect = host.getBoundingClientRect();
+  const vw = hostRect.width, vh = hostRect.height;
+  if (vw < 40 || vh < 40) return;
+
+  const isMobile = vw < 720;
+  const count = isMobile ? 26 : 52;
+  const gap = 8;
+  const forbidden = eqForbiddenRect(host);
+
+  const cellW = isMobile ? 74 : 108;
+  const cellH = isMobile ? 38 : 44;
+  const cols = Math.max(1, Math.floor(vw / cellW));
+  const rows = Math.max(1, Math.floor(vh / cellH));
+  const cells = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) cells.push({ x: c * cellW, y: r * cellH });
+  }
+  shuffle(cells);
+  let cellPtr = 0;
+
+  const placedRects = [];
+  const maxAttempts = 50;
+
+  for (let i = 0; i < count; i++) {
+    const item = pickEqItem();
+    const span = el('span', 'eq', esc(item.text));
+    span.style.fontSize = item.size + 'rem';
+    span.style.left = '0px';
+    span.style.top = '0px';
+    span.style.opacity = '0';
+    host.appendChild(span); // 実測のため一旦DOMへ（結果は後で確定）
+
+    const w = span.offsetWidth;
+    const h = span.offsetHeight;
+
+    let placed = false;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      let x, y;
+      if (cellPtr < cells.length) {
+        const cell = cells[cellPtr++];
+        x = cell.x + (Math.random() * 10 - 5);
+        y = cell.y + (Math.random() * 10 - 5);
+      } else {
+        x = Math.random() * Math.max(1, vw - w);
+        y = Math.random() * Math.max(1, vh - h);
+      }
+      x = Math.max(2, Math.min(x, vw - w - 2));
+      y = Math.max(2, Math.min(y, vh - h - 2));
+      const rect = { left: x, top: y, right: x + w, bottom: y + h };
+
+      if (forbidden && rectsCollide(rect, forbidden, 0)) continue;
+      let collide = false;
+      for (let k = 0; k < placedRects.length; k++) {
+        if (rectsCollide(rect, placedRects[k], gap)) { collide = true; break; }
+      }
+      if (collide) continue;
+
+      let opacity = item.opacity;
+      if (forbidden && distFromRect(rect, forbidden) < 50) opacity = Math.min(opacity, 0.22);
+
+      span.style.left = x + 'px';
+      span.style.top = y + 'px';
+      span.style.opacity = opacity;
+      placedRects.push(rect);
+      placed = true;
+      break;
+    }
+
+    if (!placed) host.removeChild(span);
+  }
+}
+
+function initEqBg() {
   const host = $('#eqBg');
   if (!host) return;
-  const isMobile = mq('(max-width:719px)');
-  const slots = isMobile ? EQ_SLOTS_MOBILE : EQ_SLOTS_DESKTOP;
+  const run = () => layoutEqBg(host);
 
-  const frag = document.createDocumentFragment();
-  slots.forEach(s => {
-    const span = el('span', 'eq', esc(s.t));
-    span.style.left = s.left + '%';
-    span.style.top = s.top + '%';
-    span.style.width = s.width + '%';
-    span.style.opacity = s.op;
-    span.style.fontSize = s.size + 'rem';
-    frag.appendChild(span);
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(run).catch(run);
+  } else {
+    run();
+  }
+
+  let resizeTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(run, 200);
   });
-  host.appendChild(frag);
 
   if (!reducedMotion()) {
     let ticking = false;
@@ -1063,6 +1415,6 @@ function buildEqBg() {
     }, { passive: true });
   }
 }
-buildEqBg();
+initEqBg();
 
 })();

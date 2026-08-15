@@ -92,7 +92,29 @@ a{color:var(--accent)}
 .btn:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .btn--ghost{background:transparent;color:var(--ink-soft);border-color:var(--hairline)}
 .btn--ghost:hover{background:rgba(var(--ink-rgb),.04);color:var(--ink);border-color:var(--ink-soft)}
-.btn--go{margin-top:1.6rem;min-height:58px;padding-inline:2.4rem;font-size:1rem}
+.btn--go{
+  position:relative;overflow:hidden;isolation:isolate;z-index:0;
+  min-height:76px;min-width:208px;padding-inline:2.6rem;
+  font-family:var(--f-disp);font-weight:700;font-size:1.18rem;letter-spacing:.15em;
+  border-width:1.5px;
+  transition:transform 220ms cubic-bezier(.22,.85,.3,1),
+             box-shadow 220ms cubic-bezier(.22,.85,.3,1),
+             color 220ms ease-out;
+}
+.btn--go::before{
+  content:'';position:absolute;inset:0;z-index:-1;
+  background:var(--accent);
+  transform:scaleY(0);transform-origin:bottom;
+  transition:transform 220ms cubic-bezier(.22,.85,.3,1);
+}
+.btn--go:hover{
+  color:var(--paper);transform:translateY(-2px);
+  box-shadow:0 8px 20px rgba(var(--ink-rgb),.14);
+}
+.btn--go:hover::before{transform:scaleY(1)}
+.btn--go:active{transform:translateY(1px) scale(.985);box-shadow:none}
+.btn--go:active::before{transform:scaleY(1)}
+.btn--go:focus-visible{outline-offset:4px}
 .btn--x{border-color:var(--hairline)}
 .btn--line{border-color:#2FA36B;color:#1E7A4C}
 .btn--img{border-color:var(--accent-warm)}
@@ -122,10 +144,9 @@ a{color:var(--accent)}
 /* 背景の数式（印字された論文の余白のような） */
 .eqbg{position:absolute;inset:0;z-index:1;overflow:hidden;pointer-events:none}
 .eq{
-  position:absolute;display:block;box-sizing:border-box;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  position:absolute;display:block;white-space:nowrap;
   font-family:var(--f-formula);font-style:italic;font-weight:400;
-  color:var(--formula);text-align:left;
+  color:var(--formula);
 }
 
 /* ---------- タイトル（デザインされたロゴ） ---------- */
@@ -137,28 +158,20 @@ a{color:var(--accent)}
   line-height:.96;letter-spacing:-.02em;
   margin:0 0 1.6rem;color:var(--ink);
 }
-.logo__wm{
-  position:absolute;left:-.04em;top:-.32em;z-index:-1;
-  font-family:var(--f-formula);font-style:italic;font-weight:400;
-  font-size:2.4em;color:var(--formula);opacity:.4;
-  pointer-events:none;user-select:none;white-space:nowrap;
-}
 .logo__text{position:relative;display:inline-block}
 .logo__punct{color:var(--accent)}
 .logo__rule{display:block;width:min(320px,72%);height:6px;margin-top:.7rem}
 .logo__rule line{stroke:var(--ink);stroke-width:1;opacity:.5}
 
 .cover__lead{
-  font-family:var(--f-disp);font-weight:600;
-  font-size:clamp(1.15rem,4.6vw,1.5rem);line-height:1.8;
-  margin:0 0 1.1rem;color:var(--ink);
+  font-family:var(--f-disp);font-weight:700;
+  font-size:clamp(1.4rem,5.6vw,2.05rem);line-height:1.62;letter-spacing:.01em;
+  margin:0 0 2.2rem;color:var(--ink);max-width:14em;
 }
-.cover__note{margin:0 0 1.8rem;font-size:.82rem;line-height:1.9;color:var(--ink-soft)}
-.cover__note a{color:var(--accent);text-decoration:underline;text-underline-offset:3px}
 
 .cover__badge{
   display:inline-flex;align-items:center;
-  margin:1.5rem 0 0;padding:.5em 1.1em;
+  margin:1.3rem 0 0;padding:.5em 1.1em;
   border:1px solid var(--hairline);border-radius:99px;
   font-family:var(--f-mono);font-size:.72rem;letter-spacing:.02em;color:var(--ink-soft);
 }
@@ -172,6 +185,33 @@ a{color:var(--accent)}
 @keyframes screenIn{
   from{opacity:0;transform:translateY(10px)}
   to{opacity:1;transform:translateY(0)}
+}
+
+/* ---------- 結果表示前の演出（離散→収束→閃光→結実） ---------- */
+
+.reveal{
+  position:fixed;inset:0;z-index:200;overflow:hidden;
+  background:var(--paper);cursor:pointer;
+}
+.reveal__frag{
+  position:absolute;white-space:nowrap;opacity:0;
+  font-style:italic;font-size:.86rem;color:var(--ink-soft);
+  pointer-events:none;
+}
+.reveal__trails{position:absolute;inset:0;pointer-events:none;overflow:visible}
+.reveal__trailpath{fill:none;stroke:var(--accent);stroke-width:1;opacity:0}
+
+.reveal__wash{position:absolute;inset:0;background:var(--accent-warm);opacity:0;pointer-events:none}
+.reveal__burst{
+  position:absolute;left:50%;top:50%;width:70vmax;height:70vmax;
+  border-radius:50%;opacity:0;pointer-events:none;
+  background:radial-gradient(circle,rgba(255,255,255,.95) 0%,var(--accent-warm) 32%,var(--accent) 60%,rgba(31,58,95,0) 72%);
+}
+.reveal__rays{position:absolute;left:50%;top:50%;width:0;height:0;pointer-events:none}
+.reveal__ray{
+  position:absolute;left:-1px;top:0;width:2px;height:38vmax;opacity:0;
+  background:linear-gradient(to bottom,rgba(255,255,255,.9),var(--accent-warm) 40%,transparent 85%);
+  transform-origin:top center;
 }
 
 .step-back{

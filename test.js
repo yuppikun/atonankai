@@ -58,9 +58,15 @@ function loadPage(file) {
   });
   const { window } = dom;
 
-  // jsdom が未実装のブラウザAPIを無害なスタブに置き換える
-  window.matchMedia = window.matchMedia || function () {
-    return { matches: false, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {} };
+  // jsdom が未実装のブラウザAPIを無害なスタブに置き換える。
+  // prefers-reduced-motion は true にして、結果画面直前の演出（約2秒の
+  // 非同期シーケンス）をスキップさせ、このテストが同期的に検証できるようにする。
+  window.matchMedia = window.matchMedia || function (q) {
+    return {
+      matches: /prefers-reduced-motion/.test(String(q)),
+      media: String(q),
+      addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {}
+    };
   };
   window.HTMLElement.prototype.scrollIntoView = function () {};
   window.scrollTo = function () {};
