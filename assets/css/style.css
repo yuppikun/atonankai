@@ -122,10 +122,10 @@ a{color:var(--accent)}
 /* 背景の数式（印字された論文の余白のような） */
 .eqbg{position:absolute;inset:0;z-index:1;overflow:hidden;pointer-events:none}
 .eq{
-  position:absolute;white-space:nowrap;
+  position:absolute;display:block;box-sizing:border-box;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   font-family:var(--f-formula);font-style:italic;font-weight:400;
-  color:var(--formula);
-  will-change:transform;
+  color:var(--formula);text-align:left;
 }
 
 /* ---------- タイトル（デザインされたロゴ） ---------- */
@@ -173,6 +173,16 @@ a{color:var(--accent)}
   from{opacity:0;transform:translateY(10px)}
   to{opacity:1;transform:translateY(0)}
 }
+
+.step-back{
+  display:inline-flex;align-items:center;gap:.35em;
+  margin:0 0 1.8rem;padding:.4em .2em;min-height:auto;
+  background:none;border:none;cursor:pointer;text-decoration:none;
+  font-family:var(--f-body);font-weight:700;font-size:.82rem;color:var(--ink-soft);
+  transition:color var(--t-fast);
+}
+.step-back:hover{color:var(--accent)}
+.step-back:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 
 .field{margin-bottom:2.8rem}
 .label{
@@ -440,6 +450,12 @@ a{color:var(--accent)}
   margin-top:2.6rem;padding-top:1.4rem;border-top:1px solid var(--hairline);
   font-family:var(--f-mono);font-size:.76rem;color:var(--ink-soft);
 }
+.legal__back{
+  display:inline-flex;align-items:center;gap:.4em;margin-top:2.2rem;
+  font-family:var(--f-body);font-weight:700;font-size:.88rem;
+  color:var(--accent);text-decoration:none;
+}
+.legal__back:hover{text-decoration:underline;text-underline-offset:3px}
 
 /* ---------- フッター ---------- */
 

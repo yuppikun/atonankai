@@ -83,7 +83,7 @@ function playEnter(elm) {
   elm.classList.add('screen-enter');
 }
 
-function go(name) {
+function go(name, fromHistory) {
   $('#cover').hidden = (name !== 'cover');
   SCREENS.forEach(s => { $('#screen-' + s).hidden = (s !== name); });
   if (name === 'pick') renderPicks();
@@ -91,7 +91,20 @@ function go(name) {
   if (name === 'result') renderResult();
   window.scrollTo({ top: 0, behavior: 'auto' });
   playEnter(name === 'cover' ? $('#cover') : $('#screen-' + name));
+  if (!fromHistory && typeof history.pushState === 'function') {
+    history.pushState({ screen: name }, '');
+  }
 }
+
+/* ブラウザの「戻る」で画面遷移だけを1つ戻せるよう、履歴に画面名を積む。
+   ポップ時（fromHistory=true）は履歴を積み直さない。 */
+if (typeof history.replaceState === 'function') {
+  history.replaceState({ screen: 'cover' }, '');
+}
+window.addEventListener('popstate', e => {
+  const name = (e.state && e.state.screen) || 'cover';
+  go(name, true);
+});
 
 $$('[data-go]').forEach(b => b.addEventListener('click', () => go(b.dataset.go)));
 
@@ -986,63 +999,54 @@ $('#srcList').innerHTML = Object.keys(SOURCES).map(k =>
 
 /* ---------- 表紙：背景の数式（論文の余白に薄く組まれた印字） ---------- */
 
-const REQUIRED_EQS = [
-  'e(x) = ∫₀^∞ l(x+t) / l(x) dt',
-  'l(x) = exp( −∫₀ˣ μ(s) ds )',
-  'μ(x) = A + B·e^(Cx)',
-  'q(x) = 1 − e^(−μ(x))',
-  'N = f · ∫₀^∞ S₁(t)·S₂(t) dt',
-  'P(both alive at t) = S₁(t) × S₂(t)',
-  'S(t) = l(x+t) / l(x)'
-];
-const FILLER_EQS = [
-  'Σ (n=1→∞)', 'lim (t→∞)', '∂P/∂t', 'E[X] = ∫ x·f(x) dx',
-  'Var(X) = E[X²] − E[X]²', 'f(x) = dF(x)/dx', 'Γ(n) = (n−1)!',
-  '81.09', '87.13', '72.57', '75.45', 'l(65) = 0.896', 'l(90) = 0.258'
+/* 数式は「あらかじめ定めた配置スロット」にのみ置く（ランダム配置はしない）。
+   各スロットは left/top（%）と width（%、box-sizing:border-box）を持ち、
+   同じ帯の中でスロット同士の矩形（left〜left+width）が絶対に重ならないよう
+   数値を静的に決め打ちしてある。overflow:hidden + text-overflow:ellipsis を
+   CSS側（.eq）で必ず効かせているため、万一テキストがスロット幅より長くても
+   スロットの外にはみ出さず、隣のスロットと重なることはない。
+   画面幅の中央60%・高さの中央60%が交差する中央帯（題字・リード文・ボタン）
+   には、上端帯／下端帯（y<20%）でも中央寄りのxは避け、左右帯は常にx<20%
+   またはx>80%に収めることで、確実に踏み込まないようにしている。 */
+const EQ_SLOTS_DESKTOP = [
+  // 上端帯（y<20%、常に安全）
+  { t: 'e(x) = ∫₀^∞ l(x+t) / l(x) dt', left: 2,  top: 5,  width: 30, size: 0.95, op: 0.30 },
+  { t: 'q(x) = 1 − e^(−μ(x))',          left: 36, top: 5,  width: 28, size: 0.9,  op: 0.26 },
+  { t: 'S(t) = l(x+t) / l(x)',          left: 68, top: 5,  width: 30, size: 0.9,  op: 0.30 },
+  // 下端帯（y>80%、常に安全）
+  { t: 'l(x) = exp( −∫₀ˣ μ(s) ds )',    left: 2,  top: 91, width: 30, size: 0.95, op: 0.30 },
+  { t: 'N = f · ∫₀^∞ S₁(t)·S₂(t) dt',   left: 36, top: 91, width: 28, size: 0.85, op: 0.26 },
+  { t: 'P(both alive at t) = S₁(t) × S₂(t)', left: 68, top: 91, width: 30, size: 0.8, op: 0.30 },
+  // 左端帯（x<20%、常に安全）
+  { t: 'μ(x) = A + B·e^(Cx)',           left: 2,  top: 34, width: 16, size: 0.85, op: 0.34 },
+  { t: 'l(65) = 0.896',                 left: 2,  top: 62, width: 16, size: 0.85, op: 0.26 },
+  // 右端帯（x>80%、常に安全）
+  { t: 'l(90) = 0.258',                 left: 82, top: 34, width: 16, size: 0.85, op: 0.34 },
+  { t: 'Γ(n) = (n−1)!',                 left: 82, top: 62, width: 16, size: 0.85, op: 0.26 }
 ];
 
-/* 数式は画面上端・下端・左右の余白に寄せて配置し、中央（題字とリード文の帯）の
-   可読性を最優先する。縁帯からランダムに1つを選んで配置する。
-   モバイル幅では左右に実質的な余白が無いため、上端・下端の帯のみを使う。 */
-function eqEdgePosition(isMobile) {
-  const bands = isMobile
-    ? [
-        { xMin: 3, xMax: 97, yMin: 2,  yMax: 13 },  // 上端
-        { xMin: 3, xMax: 97, yMin: 88, yMax: 98 }   // 下端
-      ]
-    : [
-        { xMin: 3,  xMax: 97, yMin: 2,  yMax: 12 },  // 上端
-        { xMin: 3,  xMax: 97, yMin: 88, yMax: 98 },  // 下端
-        { xMin: 2,  xMax: 11, yMin: 14, yMax: 86 },  // 左端
-        { xMin: 89, xMax: 98, yMin: 14, yMax: 86 }   // 右端
-      ];
-  const b = bands[Math.floor(Math.random() * bands.length)];
-  return {
-    x: b.xMin + Math.random() * (b.xMax - b.xMin),
-    y: b.yMin + Math.random() * (b.yMax - b.yMin)
-  };
-}
+const EQ_SLOTS_MOBILE = [
+  // モバイルは本文にかからないよう、上端・下端のみに2つずつ（縦積み・全幅）
+  { t: 'e(x) = ∫₀^∞ l(x+t) / l(x) dt', left: 4, top: 3,  width: 92, size: 0.85, op: 0.28 },
+  { t: 'μ(x) = A + B·e^(Cx)',          left: 4, top: 9,  width: 92, size: 0.8,  op: 0.26 },
+  { t: 'P = S₁(t) × S₂(t)',            left: 4, top: 88, width: 92, size: 0.85, op: 0.28 },
+  { t: 'l(65) = 0.896',                left: 4, top: 94, width: 92, size: 0.8,  op: 0.26 }
+];
 
 function buildEqBg() {
   const host = $('#eqBg');
   if (!host) return;
-  const isMobile = mq('(max-width:640px)');
-  const items = REQUIRED_EQS.concat(FILLER_EQS);
-  const extra = isMobile ? 2 : 10;
-  for (let i = 0; i < extra; i++) items.push(FILLER_EQS[i % FILLER_EQS.length]);
+  const isMobile = mq('(max-width:719px)');
+  const slots = isMobile ? EQ_SLOTS_MOBILE : EQ_SLOTS_DESKTOP;
 
   const frag = document.createDocumentFragment();
-  items.forEach(text => {
-    const { x, y } = eqEdgePosition(isMobile);
-    const rot = (Math.random() * 2 - 1).toFixed(2); // -1deg〜1deg のごく微小な範囲
-    const op = (0.35 + Math.random() * 0.15).toFixed(3);
-    const size = (0.95 + Math.random() * 0.7).toFixed(2);
-    const span = el('span', 'eq', esc(text));
-    span.style.left = x + '%';
-    span.style.top = y + '%';
-    span.style.transform = 'rotate(' + rot + 'deg)';
-    span.style.opacity = op;
-    span.style.fontSize = size + 'rem';
+  slots.forEach(s => {
+    const span = el('span', 'eq', esc(s.t));
+    span.style.left = s.left + '%';
+    span.style.top = s.top + '%';
+    span.style.width = s.width + '%';
+    span.style.opacity = s.op;
+    span.style.fontSize = s.size + 'rem';
     frag.appendChild(span);
   });
   host.appendChild(frag);
