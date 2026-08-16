@@ -19,7 +19,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Outfit:wght@200;300;500&family=Roboto+Mono:wght@400;500&family=EB+Garamond:ital,wght@1,400;1,500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/css/style.css?v=20260815f">
+<link rel="stylesheet" href="assets/css/style.css?v=20260815g">
 </head>
 <body>
 
@@ -111,8 +111,10 @@
       <li><a href="contact.html">お問い合わせ</a></li>
     </ul>
 
-    <h2 class="foot__h">出典</h2>
-    <ul class="srcs" id="srcList"></ul>
+    <details class="foot__srcs">
+      <summary>出典</summary>
+      <ul class="srcs" id="srcList"></ul>
+    </details>
 
     <p class="foot__notice">本サイトの計算結果は統計上の期待値であり、個人の寿命を予測するものではありません。</p>
 
@@ -123,7 +125,7 @@
   </div>
 </footer>
 
-<script src="assets/js/data.js?v=20260815f"></script>
+<script src="assets/js/data.js?v=20260815g"></script>
 <script>
 document.getElementById('srcList').innerHTML = Object.keys(SOURCES).map(function (k) {
   return '<li><a href="' + SOURCES[k].url + '" target="_blank" rel="noopener">' + SOURCES[k].label + '</a></li>';
