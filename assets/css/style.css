@@ -148,6 +148,16 @@ a{color:var(--accent)}
   font-family:var(--f-formula);font-style:italic;font-weight:400;
   color:var(--formula);
 }
+/* 数式がゆっくり浮かび上がっては消える、呼吸するような明滅。
+   周期・開始位相は要素ごとにJS側でばらけさせてあるため、一斉には動かない。 */
+.eq--breathe{
+  animation:eqBreathe var(--eq-dur,10s) ease-in-out infinite;
+  animation-delay:var(--eq-delay,0s);
+}
+@keyframes eqBreathe{
+  0%,100%{opacity:var(--eq-op-lo,.05)}
+  50%{opacity:var(--eq-op-hi,.4)}
+}
 
 /* ---------- タイトル（デザインされたロゴ） ---------- */
 

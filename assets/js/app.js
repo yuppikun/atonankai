@@ -1265,11 +1265,11 @@ function pickFrom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 function pickEqItem() {
   const r = Math.random();
   let text, sizeMin, sizeMax, opBase;
-  if (r < 0.16) { text = pickFrom(EQ_LONG); sizeMin = 0.86; sizeMax = 1.0;  opBase = 0.30; }
-  else if (r < 0.52) { text = pickFrom(EQ_MED); sizeMin = 0.72; sizeMax = 0.85; opBase = 0.26; }
-  else { text = pickFrom(EQ_NUM); sizeMin = 0.62; sizeMax = 0.75; opBase = 0.22; }
+  if (r < 0.16) { text = pickFrom(EQ_LONG); sizeMin = 0.86; sizeMax = 1.0;  opBase = 0.42; }
+  else if (r < 0.52) { text = pickFrom(EQ_MED); sizeMin = 0.72; sizeMax = 0.85; opBase = 0.36; }
+  else { text = pickFrom(EQ_NUM); sizeMin = 0.62; sizeMax = 0.75; opBase = 0.30; }
   const size = sizeMin + Math.random() * (sizeMax - sizeMin);
-  const opacity = Math.min(0.38, Math.max(0.18, opBase + (Math.random() * 0.14 - 0.07)));
+  const opacity = Math.min(0.5, Math.max(0.24, opBase + (Math.random() * 0.14 - 0.07)));
   return { text, size, opacity };
 }
 
@@ -1322,6 +1322,7 @@ function layoutEqBg(host) {
   const count = isMobile ? 26 : 52;
   const gap = 8;
   const forbidden = eqForbiddenRect(host);
+  const breathe = !reducedMotion();
 
   const cellW = isMobile ? 74 : 108;
   const cellH = isMobile ? 38 : 44;
@@ -1372,11 +1373,25 @@ function layoutEqBg(host) {
       if (collide) continue;
 
       let opacity = item.opacity;
-      if (forbidden && distFromRect(rect, forbidden) < 50) opacity = Math.min(opacity, 0.22);
+      if (forbidden && distFromRect(rect, forbidden) < 50) opacity = Math.min(opacity, 0.26);
 
       span.style.left = x + 'px';
       span.style.top = y + 'px';
-      span.style.opacity = opacity;
+
+      if (breathe) {
+        // ゆっくり・非同期に「浮かび上がっては消える」呼吸アニメーション。
+        // 周期と開始位相を要素ごとにばらけさせ、一斉に明滅しないようにする。
+        const dur = (7 + Math.random() * 8).toFixed(2); // 7〜15秒
+        const delay = (-Math.random() * dur).toFixed(2); // 負の遅延で開始位相をずらす
+        span.style.setProperty('--eq-op-hi', String(opacity));
+        span.style.setProperty('--eq-op-lo', (opacity * 0.12).toFixed(3));
+        span.style.setProperty('--eq-dur', dur + 's');
+        span.style.setProperty('--eq-delay', delay + 's');
+        span.classList.add('eq--breathe');
+      } else {
+        span.style.opacity = opacity;
+      }
+
       placedRects.push(rect);
       placed = true;
       break;
